@@ -1,0 +1,524 @@
+.oraxai-web {
+  min-width: 722px;
+}
+
+.oraxai-web .breadcrumb {
+   border-bottom: 1px solid #E0E0E0;
+   padding: 8px 15px;
+   position: fixed;
+   top: 50px;
+   left: 282px;
+   z-index: 5;
+   width: calc(100% - 282px);
+   background-color: #fff;
+   z-index: 10;
+   gap: 5px;
+   transition: all 0.3s ease;
+ }
+
+ .oraxai-web.oraxai-web-collapsed .breadcrumb {
+  left: 0px;
+  width: calc(100% - 0px);
+  transition: all 0.3s ease;
+  padding: 8px 10px 8px 25px;
+ }
+
+ .oraxai-web .main-menu {
+   left: 0px;
+   height: 100%;
+   width: 68px;
+   position: fixed;
+   background-color: #ebebeb;
+   border-right: 1px solid rgba(0, 0, 0, 0.06);
+ }
+
+ .oraxai-web .main-menu button {
+   padding: 10px 0;
+   width: 100%;
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   justify-content: center;
+ }
+
+
+ .oraxai-web .main-menu button:hover {
+   background-color: #dcdcdc;
+   transition: all 0.3s ease;
+ }
+
+ .oraxai-web .main-menu button.active {
+   background-color: #dcdcdc;
+   position: relative;
+ }
+
+ .oraxai-web .main-menu button.active:after {
+   content: '';
+   display: block;
+   position: absolute;
+   top: 10px;
+   left: 1px;
+   width: 3px;
+   height: calc(100% - 20px);
+   background-color: rgb(34, 139, 230);
+ }
+
+ .oraxai-web .main-menu button.active.its:after {
+   background-color: #e03131;
+ }
+
+.oraxai-web .sub-menu-section
+{
+  transition: all 0.3s ease;
+  z-index: -1;
+}
+
+.oraxai-web.oraxai-web-collapsed .sub-menu-section
+{
+  left: -282px !important;
+  order: 1;
+  z-index: -1;
+}
+
+
+
+
+ .oraxai-web .app-shell-navbar .sub-menu-handle {
+   width: 15px;
+   height: 25px;
+   background: url('/icons/submenu-handle-arrow-left.svg') no-repeat center center #228be6;
+   background-size: 7px;
+   position: absolute;
+   top: 20px;
+   transform: translateY(-50%);
+   right: 0;
+   z-index: 10;
+   border-radius: 5px 0 0 5px;
+   padding: 0;
+   border: none;
+   cursor: pointer;
+   transition: all 0.3s ease;
+ }
+
+ .oraxai-web.oraxai-web-collapsed .app-shell-navbar .sub-menu-handle {
+  background: url('/icons/submenu-handle-arrow-right.svg') no-repeat center center #228be6;
+  background-size: 7px;
+  border-radius: 0 5px 5px 0;
+  transition: all 0.3s ease;
+}
+ 
+ 
+
+
+ .oraxai-web .sub-menu-title {
+   height: 60px;
+   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+   display: flex;
+   align-items: center;
+   padding-left: 10px;
+   position: relative;
+ }
+
+ .oraxai-web .sub-menu-title h4 {
+   display: flex;
+   align-items: center;
+   font-weight: 500;
+ }
+
+ .oraxai-web .sub-menu-title-icon {
+   border-radius: 5px;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   margin-right: 6px;
+ }
+
+ .oraxai-web .sub-menu-group-wrapper {
+   padding: 20px 10px;
+   display: flex;
+   width: 100%;
+ }
+
+ .oraxai-web .sub-menu-group-wrapper .sub-menu-group {
+   width: 100%;
+   padding-left: 0px;
+   display: flex;
+ }
+
+ .oraxai-web .sub-menu-group-wrapper .sub-menu-group .sub-menu-group-title {
+   display: flex;
+   align-items: center;
+   width: 100%;
+   border-radius: 5px;
+   padding: 6px 4px;
+   color: #424242;
+   font-size: 14px;
+   position: relative;
+   background-color: #ececec;
+   font-weight: 500;
+   font-size: 13px;
+ }
+
+ .oraxai-web .sub-menu-group-wrapper .sub-menu-group .sub-menu-group-title.active {
+   background-color: #228be61f;
+   color: #228be6;
+   font-weight: 500;
+ }
+
+ .oraxai-web .sub-menu-group-wrapper .sub-menu-group .sub-menu-group-title:after {
+   content: '';
+   display: block;
+   background: #ddd;
+   left: -10px;
+   width: 4px;
+   height: 20px;
+   position: absolute;
+   transition: all 0.3s ease;
+ }
+
+ .oraxai-web .sub-menu-group-wrapper .sub-menu-group .sub-menu-group-title.active:after {
+  background: #228be6;
+
+}
+
+ .oraxai-web .sub-menu-group-wrapper .sub-menu-group .sub-menu-group-item {
+   width: 100%;
+   padding-left: 8px;
+   display: flex;
+ }
+
+ .oraxai-web .sub-menu-group-wrapper .sub-menu-group .sub-menu-group-item button {
+   font-size: 13px;
+   display: flex;
+   width: 100%;
+ }
+
+ .oraxai-web .sub-menu-group-wrapper .sub-menu-group .sub-menu-group-item p {
+   font-size: 13px;
+ }
+
+
+ .oraxai-web .sub-menu-button {
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   width: 100%;
+   border-radius: 5px;
+   padding: 0.5rem 1rem;
+   border: none;
+   color: #424242;
+   font-size: 13px;
+   position: relative;
+   cursor: pointer;
+   transition: all 0.3s ease;
+ }
+
+ .oraxai-web .sub-menu-button:hover {
+   background: #E1E1E1;
+   transition: all 0.3s ease;
+ }
+
+ .oraxai-web .sub-menu-button.active {
+   background: #ECECEC;
+   transition: all 0.3s ease;
+ }
+
+ .oraxai-web .sub-menu-button.active:after {
+   content: '';
+   transition: all 0.3s ease;
+ }
+
+ .oraxai-web .sub-menu-button.active:after {
+   content: '';
+   display: block;
+   background: #ddd;
+   left: -14px;
+   width: 4px;
+   height: 20px;
+   position: absolute;
+   transition: all 0.3s ease;
+ }
+
+ /*
+    .sub-menu-button:hover {
+      background: #E1E1E1;
+      transition: all 0.8s ease;
+    }
+  */
+
+ .oraxai-web .sub-menu-button:after {
+   content: '';
+   transition: all 0.3s ease;
+ }
+
+ .oraxai-web .sub-menu-button:hover:after {
+   content: '';
+   display: block;
+   background: #ddd;
+   left: -14px;
+   width: 4px;
+   height: 20px;
+   position: absolute;
+   transition: all 0.3s ease;
+ }
+
+
+
+ .oraxai-web .sub-menu-button button {
+   font-size: 13px;
+   display: flex;
+   align-items: center;
+   display: inline-block;
+
+ }
+
+
+
+ .oraxai-web .logo {
+   background-image: url('/oraxai-its-logo.svg?v=1');
+   background-size: 100%;
+   background-repeat: no-repeat;
+   background-position: center center;
+   width: 140px;
+   height: 100%;
+ }
+
+ .oraxai-web .header .settings {
+   width: 18px;
+   height: 18px;
+   background-image: url('/icons/settings.svg');
+   background-size: 100%;
+   background-repeat: no-repeat;
+   background-position: center center;
+ }
+
+ .oraxai-web .header .avatar {
+   cursor: pointer;
+ }
+
+
+ .oraxai-web .main-content {
+   padding: 0px;
+   position: relative;
+   margin-top: 144px;
+   margin-left: 282px;
+   width: calc(100% - 282px);
+   padding: 16px;
+   min-height: calc(100dvh - 144px);
+   transition: all 0.3s ease;
+ }
+
+
+
+ .oraxai-web.oraxai-web-collapsed .main-content {
+  margin-left: 0px;
+  width: calc(100%);
+}
+
+ .oraxai-web .main-content .page-header {
+   padding: 0 16px;
+   border-bottom: 1px solid #E0E0E0;
+   position: fixed;
+   top: 84px;
+   left: 282px;
+   z-index: 5;
+   width: calc(100% - 282px);
+   height: 60px;
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   background-color: #fff;
+   transition: all 0.3s ease;
+ }
+
+ .oraxai-web.oraxai-web-collapsed .main-content .page-header {
+  left: 0;
+  width: calc(100%);
+ }
+
+
+ .oraxai-web .main-content .page-header .page-title {
+   position: relative;
+   height: 30px;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+ }
+
+
+ .oraxai-web .main-content .page-header .h1 {
+   display: flex;
+   align-items: center;
+   font-weight: 500;
+   font-size: 16px;
+ }
+
+ .oraxai-web .main-content .page-header .page-title-icon {
+   border-radius: 5px;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   margin-right: 6px;
+ }
+
+
+
+
+ .oraxai-web .wrapper {
+   border: solid 1px #e9ecef;
+   border-radius: calc(0.5rem * 1);
+   padding: 10px;
+ }
+
+ /* ZPL Style Fonts - Labelary benzeri fontlar */
+ .oraxai-web .zpl-font-0 {
+   font-family: 'Courier New', 'Courier', monospace;
+   font-weight: normal;
+   font-style: normal;
+   letter-spacing: 0.5px;
+   line-height: 1.2;
+ }
+
+ .oraxai-web .zpl-font-1 {
+   font-family: 'Courier New', 'Courier', monospace;
+   font-weight: bold;
+   font-style: normal;
+   letter-spacing: 0.3px;
+   line-height: 1.1;
+ }
+
+ .oraxai-web .zpl-font-2 {
+   font-family: 'Arial', 'Helvetica', sans-serif;
+   font-weight: normal;
+   font-style: normal;
+   letter-spacing: 0.2px;
+   line-height: 1.3;
+ }
+
+ .oraxai-web .zpl-font-3 {
+   font-family: 'Arial', 'Helvetica', sans-serif;
+   font-weight: bold;
+   font-style: normal;
+   letter-spacing: 0.1px;
+   line-height: 1.2;
+ }
+
+ .oraxai-web .zpl-font-4 {
+   font-family: 'Times New Roman', 'Times', serif;
+   font-weight: normal;
+   font-style: normal;
+   letter-spacing: 0.4px;
+   line-height: 1.4;
+ }
+
+ .oraxai-web .zpl-font-5 {
+   font-family: 'Times New Roman', 'Times', serif;
+   font-weight: bold;
+   font-style: normal;
+   letter-spacing: 0.3px;
+   line-height: 1.3;
+ }
+
+ /* ZPL Font Sizes - Labelary'deki gibi */
+ .oraxai-web .zpl-size-8 {
+   font-size: 8px;
+ }
+
+ .zpl-size-10 {
+   font-size: 10px;
+ }
+
+ .oraxai-web .zpl-size-12 {
+   font-size: 12px;
+ }
+
+ .oraxai-web .zpl-size-14 {
+   font-size: 14px;
+ }
+
+ .oraxai-web .zpl-size-16 {
+   font-size: 16px;
+ }
+
+ .oraxai-web .zpl-size-18 {
+   font-size: 18px;
+ }
+
+ .oraxai-web .zpl-size-20 {
+   font-size: 20px;
+ }
+
+ .oraxai-web .zpl-size-24 {
+   font-size: 24px;
+ }
+
+ .oraxai-web .zpl-size-30 {
+   font-size: 30px;
+ }
+
+ .oraxai-web .zpl-size-36 {
+   font-size: 36px;
+ }
+
+ .oraxai-web .zpl-size-48 {
+   font-size: 48px;
+ }
+
+ .oraxai-web .zpl-size-60 {
+   font-size: 60px;
+ }
+
+ .oraxai-web .zpl-size-72 {
+   font-size: 72px;
+ }
+
+ .oraxai-web .zpl-size-96 {
+   font-size: 96px;
+ }
+
+ /* ZPL Text Alignment */
+ .oraxai-web .zpl-text-left {
+   text-align: left;
+ }
+
+ .oraxai-web .zpl-text-center {
+   text-align: center;
+ }
+
+ .oraxai-web .zpl-text-right {
+   text-align: right;
+ }
+
+ /* ZPL Text Rotation */
+ .oraxai-web .zpl-rotate-0 {
+   transform: rotate(0deg);
+ }
+
+ .oraxai-web .zpl-rotate-90 {
+   transform: rotate(90deg);
+ }
+
+ .oraxai-web .zpl-rotate-180 {
+   transform: rotate(180deg);
+ }
+
+ .oraxai-web .zpl-rotate-270 {
+   transform: rotate(270deg);
+ }
+
+ /* ZPL Barcode Styles */
+ .oraxai-web .zpl-barcode {
+   font-family: 'Courier New', 'Courier', monospace;
+   font-weight: bold;
+   letter-spacing: 1px;
+   text-align: center;
+ }
+
+ /* ZPL Label Container */
+ .oraxai-web .zpl-label {
+   background: white;
+   border: 1px solid #ccc;
+   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+   position: relative;
+   overflow: hidden;
+ }
