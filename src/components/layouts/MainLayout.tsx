@@ -7,7 +7,7 @@ import { MainMenuButton } from '@/components/ui/web/menu/MainMenuButton';
 import { SubMenu } from '@/components/ui/web/menu/SubMenu';
 import { Breadcrumb } from '@/components/ui/web/layout/Breadcrumb';
 import { useMenu } from '@/hooks/useMenu';
-import { useLayoutEditorStore } from '@/store/menuStore';
+import { useLayoutEditorStore, useSidebarStore } from '@/store/menuStore';
 import type { ReactNode } from 'react';
 import { Header } from '../ui/web/layout/Header';
 
@@ -28,7 +28,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   } = useMenu();
 
   const { isPopupOpen, closeLayoutEditorPopup } = useLayoutEditorStore();
-  const [width, setWidth] = useState(282);
+  const { width, setWidth, closeSidebar, openSidebar } = useSidebarStore();
   
   
   // URL değişikliklerinde menü durumunu güncelle
@@ -72,11 +72,9 @@ export function MainLayout({ children }: MainLayoutProps) {
   const changeCollapsed = () => {
     const oraxaiWeb = document.querySelector('.oraxai-web');
     if (oraxaiWeb?.classList.contains('oraxai-web-collapsed')) {
-      oraxaiWeb.classList.remove('oraxai-web-collapsed');
-      setWidth(282);
+      openSidebar();
     } else {
-      oraxaiWeb?.classList.add('oraxai-web-collapsed');
-      setWidth(15);
+      closeSidebar();
     }
   }
 

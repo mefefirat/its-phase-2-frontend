@@ -90,7 +90,6 @@ export default function MaterialForm({ initialData, editMode = false, materialId
     label: '',
     capacity_items: 0,
     barcode_prefix: '',
-    barcode_start_value: 1,
   });
 
   useEffect(() => {
@@ -119,12 +118,11 @@ export default function MaterialForm({ initialData, editMode = false, materialId
       label: selected.label,
       capacity_items: Number(newNode.capacity_items) || 0,
       barcode_prefix: selected.prefix,
-      barcode_start_value: Number(newNode.barcode_start_value) || 1,
     } as Omit<MaterialPackHierarchyItem, 'id' | 'created_at' | 'created_by' | 'updated_at' | 'updated_by'>;
 
     await addPackHierarchy(payload);
     await fetchPackHierarchies(finalMaterialId);
-    setNewNode({ material_id: finalMaterialId, parent_id: null, code: '', label: '', capacity_items: 0, barcode_prefix: '', barcode_start_value: 1 });
+    setNewNode({ material_id: finalMaterialId, parent_id: null, code: '', label: '', capacity_items: 0, barcode_prefix: '' });
   };
 
   const handleSubmit = async (values: Partial<Material>) => {
@@ -265,7 +263,7 @@ export default function MaterialForm({ initialData, editMode = false, materialId
             </Group>
 
             <Grid mb="md">
-              <Grid.Col span={4}>
+              <Grid.Col span={6}>
                 <Select
                   label="Tip Seç"
                   placeholder="Seçiniz"
@@ -275,20 +273,12 @@ export default function MaterialForm({ initialData, editMode = false, materialId
                   disabled={availableTypes.length === 0}
                 />
               </Grid.Col>
-              <Grid.Col span={4}>
+              <Grid.Col span={6}>
                 <NumberInput
                   label="Kapasite"
                   min={0}
                   value={newNode.capacity_items}
                   onChange={(val) => setNewNode((prev) => ({ ...prev, capacity_items: Number(val) || 0 }))}
-                />
-              </Grid.Col>
-              <Grid.Col span={4}>
-                <NumberInput
-                  label="Barkod Başlangıç Numarası"
-                  min={1}
-                  value={newNode.barcode_start_value}
-                  onChange={(val) => setNewNode((prev) => ({ ...prev, barcode_start_value: Number(val) || 1 }))}
                 />
               </Grid.Col>
               <Grid.Col span={12} style={{ textAlign: 'right' }}>
@@ -303,7 +293,6 @@ export default function MaterialForm({ initialData, editMode = false, materialId
                 <Table.Tr>
                   <Table.Th>Tip</Table.Th>
                   <Table.Th>Ürün Kapasitesi</Table.Th>
-                  <Table.Th>Barkod Başlangıç Numarası</Table.Th>
                   <Table.Th style={{ width: 60 }}></Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -318,9 +307,6 @@ export default function MaterialForm({ initialData, editMode = false, materialId
                     </Table.Td>
                     <Table.Td>
                       <Text>{h.capacity_items}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text>{h.barcode_start_value}</Text>
                     </Table.Td>
                     <Table.Td>
                       {h.id && (

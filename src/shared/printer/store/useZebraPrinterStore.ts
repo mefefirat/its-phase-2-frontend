@@ -50,97 +50,109 @@ const checkBrowserPrintAvailability = (): Promise<void> => {
   });
 };
 
-export const useZebraPrinterStore = create<ZebraPrinterState>()(
-  devtools(
-    (set, get) => ({
-      ...initialState,
+// Store factory function - her printer türü için ayrı instance oluşturur
+export const createZebraPrinterStore = (storeName: string) => {
+  return create<ZebraPrinterState>()(
+    devtools(
+      (set, get) => ({
+        ...initialState,
 
-      setSelectedDevice: (device) => 
-        set({ selectedDevice: device }, false, 'setSelectedDevice'),
+        setSelectedDevice: (device) => 
+          set({ selectedDevice: device }, false, 'setSelectedDevice'),
 
-      setDevices: (devices) => 
-        set({ devices }, false, 'setDevices'),
+        setDevices: (devices) => 
+          set({ devices }, false, 'setDevices'),
 
-      setLoading: (isLoading) => 
-        set({ isLoading }, false, 'setLoading'),
+        setLoading: (isLoading) => 
+          set({ isLoading }, false, 'setLoading'),
 
-      setError: (error) => 
-        set({ error }, false, 'setError'),
+        setError: (error) => 
+          set({ error }, false, 'setError'),
 
-      loadPrinters: async () => {
-        const { setLoading, setError, setDevices, setSelectedDevice, selectedDevice } = get();
-        
-        try {
-          setLoading(true);
-          setError(null);
+        loadPrinters: async () => {
+          const { setLoading, setError, setDevices, setSelectedDevice, selectedDevice } = get();
           
-          await checkBrowserPrintAvailability();
-          
-          return new Promise<void>((resolve, reject) => {
-            window.BrowserPrint.getDefaultDevice(
-              "printer",
-              (defaultDevice: BrowserPrintDevice) => {
-                const newDevices = [defaultDevice];
-                
-                window.BrowserPrint.getLocalDevices(
-                  (deviceList: BrowserPrintDevice[]) => {
-                    const allDevices = [...newDevices];
-                    
-                    deviceList.forEach((device) => {
-                      console.log('Device found:', device);
-                      // Sadece geçerli uid'li ve farklı cihazları ekle
-                      if (device.uid && device.uid.trim() !== '' && !allDevices.find(d => d.uid === device.uid)) {
-                        allDevices.push(device);
+          try {
+            setLoading(true);
+            setError(null);
+            
+            await checkBrowserPrintAvailability();
+            
+            return new Promise<void>((resolve, reject) => {
+              window.BrowserPrint.getDefaultDevice(
+                "printer",
+                (defaultDevice: BrowserPrintDevice) => {
+                  const newDevices = [defaultDevice];
+                  
+                  window.BrowserPrint.getLocalDevices(
+                    (deviceList: BrowserPrintDevice[]) => {
+                      const allDevices = [...newDevices];
+                      
+                      deviceList.forEach((device) => {
+                        console.log('Device found:', device);
+                        // Sadece geçerli uid'li ve farklı cihazları ekle
+                        if (device.uid && device.uid.trim() !== '' && !allDevices.find(d => d.uid === device.uid)) {
+                          allDevices.push(device);
+                        }
+                      });
+                      
+                      setDevices(allDevices);
+                      
+                      // Eğer seçili cihaz yoksa veya artık mevcut değilse, ilk cihazı seç
+                      if (!selectedDevice || !allDevices.find(d => d.uid === selectedDevice.uid)) {
+                        if (allDevices.length > 0) {
+                          setSelectedDevice(allDevices[0]);
+                        }
                       }
-                    });
-                    
-                    setDevices(allDevices);
-                    
-                    // Eğer seçili cihaz yoksa veya artık mevcut değilse, ilk cihazı seç
-                    if (!selectedDevice || !allDevices.find(d => d.uid === selectedDevice.uid)) {
-                      if (allDevices.length > 0) {
-                        setSelectedDevice(allDevices[0]);
-                      }
-                    }
-                    
-                    setLoading(false);
-                    setError(null);
-                    resolve();
-                  },
-                  (error: string) => {
-                    const errorMsg = `Yerel cihazlar alınamadı: ${error}`;
-                    setError(errorMsg);
-                    setLoading(false);
-                    reject(new Error(errorMsg));
-                  },
-                  "printer"
-                );
-              },
-              (error: string) => {
-                const errorMsg = `Varsayılan cihaz alınamadı: ${error}`;
-                setError(errorMsg);
-                setLoading(false);
-                reject(new Error(errorMsg));
-              }
-            );
-          });
-        } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : 'Bilinmeyen hata';
-          setError(errorMessage);
-          setLoading(false);
-          throw err;
-        }
-      },
+                      
+                      setLoading(false);
+                      setError(null);
+                      resolve();
+                    },
+                    (error: string) => {
+                      const errorMsg = `Yerel cihazlar alınamadı: ${error}`;
+                      setError(errorMsg);
+                      setLoading(false);
+                      reject(new Error(errorMsg));
+                    },
+                    "printer"
+                  );
+                },
+                (error: string) => {
+                  const errorMsg = `Varsayılan cihaz alınamadı: ${error}`;
+                  setError(errorMsg);
+                  setLoading(false);
+                  reject(new Error(errorMsg));
+                }
+              );
+            });
+          } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Bilinmeyen hata';
+            setError(errorMessage);
+            setLoading(false);
+            throw err;
+          }
+        },
 
-      refreshPrinters: () => {
-        get().loadPrinters();
-      },
+        refreshPrinters: () => {
+          get().loadPrinters();
+        },
 
-      reset: () => 
-        set(initialState, false, 'reset'),
-    }),
-    {
-      name: 'zebra-printer-store', // Redux DevTools için isim
-    }
-  )
-);
+        reset: () => 
+          set(initialState, false, 'reset'),
+      }),
+      {
+        name: `zebra-printer-store-${storeName}`, // Her store için benzersiz isim
+      }
+    )
+  );
+};
+
+// Varsayılan store (geriye uyumluluk için)
+export const useZebraPrinterStore = createZebraPrinterStore('default');
+
+// Palet printer için ayrı store
+export const usePalletPrinterStore = createZebraPrinterStore('pallet');
+
+// Etiket printer için ayrı store  
+export const useLabelPrinterStore = createZebraPrinterStore('label');

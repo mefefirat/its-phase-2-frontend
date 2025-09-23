@@ -1,33 +1,141 @@
-import { TextInput, Button, Group, Text, LoadingOverlay, Paper, Title, ThemeIcon, Stack, Badge, Progress, Table, ActionIcon } from '@mantine/core';
+import { TextInput, Button, Group, Text, LoadingOverlay, Paper, Title, ThemeIcon, Stack, Badge, Progress, Table, ActionIcon, Box, Grid, Menu } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useJobStore } from '../store/jobStore';
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { notifications } from '@mantine/notifications';
-import { IconArrowLeft, IconDeviceFloppy, IconQrcode, IconPlus, IconMinus } from '@tabler/icons-react';
+import { useSidebarStore } from '@/store/menuStore';
+import { useIsUserAdmin } from '@/store/globalStore';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { IconArrowLeft, IconDeviceFloppy, IconQrcode, IconPlus, IconMinus, IconPrinter, IconSettings, IconX, IconChevronDown, IconChevronUp, IconCheck, IconLockX, IconDotsVertical, IconRefresh } from '@tabler/icons-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Job, UpdateJobRequest } from '../types/job';
+import { printWithLabelPrinter, isPrinterConfigured } from '@/utils/printerUtils';
+import { normalizeText } from '@/utils/normalizeText';
+import { pharmaValidator } from '@/utils/pharmaValidator';
 
 export default function JobScan() {
   const { fetchJobById, fetchJobPackHierarchyRecursive, jobPackHierarchy } = useJobStore();
   const { jobPackages } = useJobStore();
+  const { fetchJobPackageHierarchyByLatestScan, jobPackageHierarchyByLatestScan } = useJobStore();
+  const { fetchLastScannedByJob, lastScanned } = useJobStore();
+  const isUserAdmin = useIsUserAdmin();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [scannedItems, setScannedItems] = useState<number>(0);
+  // last scanned list is now provided by store: lastScanned
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [childrenByParent, setChildrenByParent] = useState<Record<string, any[]>>({});
   const [loadingChildren, setLoadingChildren] = useState<Record<string, boolean>>({});
+  const [scansByParent, setScansByParent] = useState<Record<string, any[]>>({});
+  const [canPrint, setCanPrint] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null);
+  const [isJobInfoExpanded, setIsJobInfoExpanded] = useState(true);
+  const depthBgColors = ['#ffffff', '#f8f9fa', '#f1f3f5', '#e9ecef', '#dee2e6'];
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const [overlay, setOverlay] = useState(false);
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
+  const { closeSidebar } = useSidebarStore();
   
   const jobId = params.id;
+
+  // İş tamamlanma durumu
+  const isCompleted = !!job && (
+    job.status === 'completed' ||
+    !!job.completed_at ||
+    (scannedItems >= (job?.planned_items ?? 0) && (job?.planned_items ?? 0) > 0)
+  );
 
   const form = useForm<{ barcode: string }>({
     initialValues: {
       barcode: '',
     },
   });
+
+  // Yazdırma için gerekli bilgilerin kontrolü
+  const checkPrintRequirements = () => {
+    const hasRequiredFields = !!(job?.material_name && job?.gtin && job?.lot && job?.expiry_date);
+    const hasPrinter = isPrinterConfigured('label');
+    setCanPrint(hasRequiredFields && hasPrinter);
+  };
+
+  // Yazdırma fonksiyonu
+  const handlePrintLabel = async (
+    barcode: string,
+    material_name?: string | null,
+    gtin?: string | null,
+    lot?: string | null,
+    expiry_date?: string | null,
+    code?: string
+  ) => {
+    if (!isPrinterConfigured('label')) {
+      setErrorMessage('Etiket printer\'ı ayarlanmamış. Lütfen ayarlar sayfasından printer seçin.');
+      return;
+    }
+
+    // Gerekli alanların kontrolü
+    if (!material_name || !gtin || !lot || !expiry_date) {
+      setErrorMessage('Yazdırma için gerekli bilgiler eksik (Material Name, GTIN, Lot, Expiry Date).');
+      return;
+    }
+
+    // Code'a göre tip belirleme
+    const getTypeLabel = (code?: string) => {
+      switch (code) {
+        case 'P': return 'PALET';
+        case 'C': return 'KOLI';
+        case 'S': return 'BAG';
+        case 'B': return 'KOLI ICI KUTU';
+        case 'E': return 'KUCUK BAG';
+        default: return 'BAG ETIKETI';
+      }
+    };
+
+    // Basit ZPL etiketi oluştur - dinamik değerlerle
+    const zplContent = `^XA
+^PW479
+^LL319
+
+^GB479,319,2,B^FS
+
+^FO15,15^A0N,30,30^FDURUN^FS
+^FO15,50^A0N,25,25^FD${normalizeText(material_name)}^FS
+
+^FO15,110^GB449,2,2^FS
+
+^FO15,125^A0N,20,20^FDGTIN:^FS
+^FO70,125^A0N,20,20^FD${gtin}^FS
+^FO230,125^A0N,20,20^FDLOT:^FS
+^FO280,125^A0N,20,20^FD${lot}^FS
+
+^FO15,155^A0N,20,20^FDSKT:^FS
+^FO70,155^A0N,20,20^FD${expiry_date}^FS
+^FO230,155^A0N,20,20^FDTIP:^FS
+^FO280,155^A0N,20,20^FD${getTypeLabel(code)}^FS
+
+^FO15,185^GB449,2,2^FS
+
+^BY1.5,2,70
+^FO40,210^BCN,70,N,N,N
+^FD${barcode}^FS
+
+^CF0,16
+^FO0,290^FB479,1,0,C,0^FD${barcode}^FS
+
+^XZ`;
+
+    try {
+      const result = await printWithLabelPrinter(zplContent);
+      
+      if (result.success) {
+        setErrorMessage(null); // Clear any previous errors on success
+      } else {
+        setErrorMessage(result.message);
+      }
+    } catch (error) {
+      setErrorMessage('Yazdırma işlemi sırasında bir hata oluştu');
+    }
+  };
 
   useEffect(() => {
     const fetchJobData = async () => {
@@ -39,11 +147,7 @@ export default function JobScan() {
         setJob(jobData);
         setScannedItems(jobData.scanned_items ?? 0);
       } catch (error: any) {
-        notifications.show({
-          title: 'Hata',
-          message: 'İş bilgileri yüklenirken bir hata oluştu',
-          color: 'red',
-        });
+        setErrorMessage('İş bilgileri yüklenirken bir hata oluştu');
       } finally {
         setIsLoading(false);
       }
@@ -51,6 +155,11 @@ export default function JobScan() {
 
     fetchJobData();
   }, [jobId]);
+
+  // Job verisi yüklendiğinde yazdırma gereksinimlerini kontrol et
+  useEffect(() => {
+    checkPrintRequirements();
+  }, [job]);
 
   // Paket hiyerarşisini sayfa açılışında yükle
   useEffect(() => {
@@ -64,6 +173,30 @@ export default function JobScan() {
     })();
   }, [jobId, fetchJobPackHierarchyRecursive]);
 
+  // En son taramaya göre paket hiyerarşisini yükle
+  useEffect(() => {
+    if (!jobId) return;
+    (async () => {
+      try {
+        await fetchJobPackageHierarchyByLatestScan(jobId);
+      } catch (e) {
+        // Hata store tarafından bildiriliyor
+      }
+    })();
+  }, [jobId, fetchJobPackageHierarchyByLatestScan]);
+
+  // Sayfa yüklenince son tarananları çek
+  useEffect(() => {
+    if (!jobId) return;
+    (async () => {
+      try {
+        await fetchLastScannedByJob(jobId);
+      } catch (e) {
+        // Hata store tarafından bildiriliyor
+      }
+    })();
+  }, [jobId, fetchLastScannedByJob]);
+
   // Hiyerarşi listesini normalize et (API data veya düz liste olabilir)
   const hierarchyList = useMemo(() => {
     const raw: any = jobPackHierarchy as any;
@@ -73,15 +206,16 @@ export default function JobScan() {
     return [] as any[];
   }, [jobPackHierarchy]);
 
-  // Barcode input'una focus yap (sayfa yüklendiğinde)
-  useEffect(() => {
-    if (barcodeInputRef.current) {
-      setTimeout(() => {
-        barcodeInputRef.current?.focus();
-        barcodeInputRef.current?.select();
-      }, 300);
-    }
-  }, []);
+  // Barcode input'una focus yap (sayfa yüklendiğinde) - şimdilik kapatıldı
+  // useEffect(() => {
+  //   if (barcodeInputRef.current) {
+  //     setTimeout(() => {
+  //       barcodeInputRef.current?.focus();
+  //       barcodeInputRef.current?.select();
+  //     }, 300);
+  //   }
+  // }, []);
+
 
   const handleBack = () => {
     navigate(`/jobs/edit/${jobId}`);
@@ -89,28 +223,150 @@ export default function JobScan() {
 
   const handleScanSubmit = async (values: { barcode: string }) => {
     if (!jobId) return;
+    
+    // Son taranan barkodu state'e kaydet
+    setLastScannedBarcode(values.barcode);
+    
     try {
       setIsSubmitting(true);
+      
+      // Karekod validasyonu yap
+      const validationResult = pharmaValidator(values.barcode);
+      console.log(validationResult);
+      
+      if (!validationResult.status) {
+        setErrorMessage(validationResult.message || 'Karekod validasyon hatası');
+        // Hata durumunda input'u temizle
+        form.setFieldValue('barcode', '');
+        setTimeout(() => {
+          barcodeInputRef.current?.focus();
+          barcodeInputRef.current?.select();
+        }, 100);
+        return;
+      }
+      
+      // Validasyon başarılı - bilgileri al
+      const serialNumber = validationResult.serial;
+      const gtinFromBarcode = validationResult.gtin;
+      const lotFromBarcode = validationResult.lot;
+      const expiryFromBarcode = validationResult.exp;
+      
+      console.log('Validasyon başarılı - Serial:', serialNumber);
+      console.log('Karekod Bilgileri:', { gtinFromBarcode, lotFromBarcode, expiryFromBarcode });
+      
+      if (!serialNumber) {
+        setErrorMessage('Serial numarası bulunamadı');
+        // Hata durumunda input'u temizle
+        form.setFieldValue('barcode', '');
+        setTimeout(() => {
+          barcodeInputRef.current?.focus();
+          barcodeInputRef.current?.select();
+        }, 100);
+        return;
+      }
+
+      // Job bilgileriyle karşılaştırma
+      const jobGtin = job?.gtin;
+      const jobLot = job?.lot;
+      const jobExpiry = job?.expiry_date;
+      
+      const mismatches: string[] = [];
+      
+      // GTIN karşılaştırması
+      if (jobGtin && gtinFromBarcode !== jobGtin) {
+        mismatches.push(`GTIN: Karekod (${gtinFromBarcode}) ≠ Job (${jobGtin})`);
+      }
+      
+      // Lot karşılaştırması
+      if (jobLot && lotFromBarcode !== jobLot) {
+        mismatches.push(`Lot: Karekod (${lotFromBarcode}) ≠ Job (${jobLot})`);
+      }
+      
+      // Son kullanma tarihi karşılaştırması (YYYYMMDD formatında)
+      if (jobExpiry && expiryFromBarcode !== jobExpiry.replace(/-/g, '')) {
+        mismatches.push(`Son Kullanma: Karekod (${expiryFromBarcode}) ≠ Job (${jobExpiry})`);
+      }
+      
+      // Eşleşmeyen bilgiler varsa hata göster
+      if (mismatches.length > 0) {
+        setErrorMessage(`Karekod bilgileri job bilgileriyle eşleşmiyor:\n${mismatches.join('\n')}`);
+        // Hata durumunda input'u temizle
+        form.setFieldValue('barcode', '');
+        setTimeout(() => {
+          barcodeInputRef.current?.focus();
+          barcodeInputRef.current?.select();
+        }, 100);
+        return;
+      }
+        
+      // Serial değerini kullanarak API'ye gönder
       const scan = useJobStore.getState().scanJob;
       const response = await scan({
         job_id: jobId,
-        barcode: values.barcode,
+        barcode: serialNumber, // Serial değerini gönder
       });
 
-      console.log(response);
-      // API'den gelen scanned_items zaten toplam değer
-      if (response?.scanned_items !== undefined) {
-        setScannedItems(response.scanned_items);
-      }
-      // Clear input after successful scan
+        console.log("RESPONSEEEEE",response);
+        // API'den gelen scanned_items zaten toplam değer
+        if (response?.scanned_items !== undefined) {
+          setScannedItems(response.scanned_items);
+        }
+
+        // Son tarananları güncelleme, aşağıda hiyerarşi yenilendikten sonra tek sefer yapılacak
+
+        // Print functionality - if print is true, print all barcodes in data array
+        if (response?.print === true && response?.data && Array.isArray(response.data)) {
+          for (const item of response.data) {
+            if (item.barcode) {
+              await handlePrintLabel(
+                item.barcode,
+                job?.material_name,
+                job?.gtin,
+                job?.lot,
+                job?.expiry_date,
+                item.code
+              );
+              // Small delay between prints to avoid overwhelming the printer
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          }
+          // Yazdırma işlemi tamamlandığında listeler güncel
+        }
+
+        // Barkod tarama işleminden sonra tüm açık paketleri kapat ve önbelleği temizle
+        setExpandedRows({}); // Tüm açık paketleri kapat
+        setChildrenByParent({}); // Alt paket verilerini temizle
+        setScansByParent({}); // Scan verilerini temizle
+        setLoadingChildren({}); // Loading durumlarını temizle
+
+        // En son tarama hiyerarşisini tazele
+        await fetchJobPackageHierarchyByLatestScan(jobId);
+        // Son tarananları tazele
+        await useJobStore.getState().fetchLastScannedByJob(jobId);
+
+        // Clear input after successful scan
+        form.setFieldValue('barcode', '');
+        // Clear any previous errors on successful scan
+        setErrorMessage(null);
+        // Focus back to input for next scan
+        setTimeout(() => {
+          barcodeInputRef.current?.focus();
+          barcodeInputRef.current?.select();
+        }, 100);
+    } catch (error: any) {
+      
+      // API'den gelen hata mesajını göster
+      const errorMessage = error?.response?.data?.error || 'Tarama işlemi sırasında bir hata oluştu';
+      setErrorMessage(errorMessage);
+      
+      // Hata durumunda input'u temizle ki kullanıcı yeniden tarama yapabilsin
       form.setFieldValue('barcode', '');
-      // Focus back to input for next scan
+      
+      // Input'a focus yap ki kullanıcı hemen yeni barkod tarayabilsin
       setTimeout(() => {
         barcodeInputRef.current?.focus();
         barcodeInputRef.current?.select();
       }, 100);
-    } catch (e) {
-      // Store already shows error notification
     } finally {
       setIsSubmitting(false);
     }
@@ -129,16 +385,35 @@ export default function JobScan() {
     })();
   }, [jobId]);
 
-  const toggleExpand = async (parentId: string) => {
+  const toggleExpand = async (parentId: string, siblingIds?: string[]) => {
     if (!jobId) return;
-    setExpandedRows((prev) => ({ ...prev, [parentId]: !prev[parentId] }));
+    setExpandedRows((prev) => {
+      const isExpanding = !prev[parentId];
+      const next: Record<string, boolean> = { ...prev, [parentId]: !prev[parentId] };
+      // When expanding, collapse other siblings at the same level
+      if (isExpanding && siblingIds && siblingIds.length > 0) {
+        for (const id of siblingIds) {
+          if (id !== parentId) {
+            next[id] = false;
+          }
+        }
+      }
+      return next;
+    });
     // If expanding and children not loaded yet, fetch
     if (!expandedRows[parentId] && !childrenByParent[parentId]) {
       try {
         setLoadingChildren((prev) => ({ ...prev, [parentId]: true }));
         const { fetchJobPackages } = useJobStore.getState();
         const children = await fetchJobPackages(jobId, parentId);
+        console.log(children);
         setChildrenByParent((prev) => ({ ...prev, [parentId]: children }));
+        // If there are no child packages, load scans for this package
+        if (!children || children.length === 0) {
+          const { fetchJobScans } = useJobStore.getState();
+          const scans = await fetchJobScans(parentId);
+          setScansByParent((prev) => ({ ...prev, [parentId]: scans }));
+        }
       } catch (e) {
         // error notification is handled in store
       } finally {
@@ -147,15 +422,16 @@ export default function JobScan() {
     }
   };
 
-  const renderRows = (items: any[]) => {
+  const renderRows = (items: any[], depth: number = 0) => {
+    const nextDepth = depth + 1;
     return items.map((pkg) => (
-      <>
-        <Table.Tr key={pkg.id}>
+      <React.Fragment key={pkg.id}>
+        <Table.Tr>
           <Table.Td>
             <ActionIcon
               variant="light"
               size="sm"
-              onClick={() => toggleExpand(pkg.id)}
+              onClick={() => toggleExpand(pkg.id, items.map((i: any) => i.id))}
               loading={!!loadingChildren[pkg.id]}
               aria-label={expandedRows[pkg.id] ? 'Daralt' : 'Genişlet'}
             >
@@ -166,34 +442,87 @@ export default function JobScan() {
           <Table.Td>
             <code style={{ color: 'black' }}>{pkg.barcode}</code>
           </Table.Td>
+          <Table.Td>
+            {pkg.barcode ? (
+            <ActionIcon
+              variant="light"
+              size="sm"
+              onClick={() => handlePrintLabel(
+                pkg.barcode,
+                job?.material_name,
+                job?.gtin,
+                job?.lot,
+                job?.expiry_date,
+                pkg.code
+              )}
+              aria-label="Etiket Yazdır"
+              color="blue"
+              disabled={!canPrint}
+            >
+              <IconPrinter size={16} />
+            </ActionIcon>
+            ) : null}
+          </Table.Td>
         </Table.Tr>
         {expandedRows[pkg.id] && (
           <Table.Tr>
-            <Table.Td colSpan={3}>
-              <Table striped withTableBorder withRowBorders withColumnBorders highlightOnHover>
+            <Table.Td colSpan={4}>
+              <Box style={{ backgroundColor: depthBgColors[Math.min(nextDepth, depthBgColors.length - 1)], borderRadius: 8, padding: 8 }}>
+                <Table striped withTableBorder withRowBorders withColumnBorders style={{ backgroundColor: depthBgColors[Math.min(nextDepth, depthBgColors.length - 1)] }}>
                 <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th style={{ width: 44 }}></Table.Th>
-                    <Table.Th>Label</Table.Th>
-                    <Table.Th>Barcode</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {childrenByParent[pkg.id] && childrenByParent[pkg.id].length > 0 ? (
-                    renderRows(childrenByParent[pkg.id])
-                  ) : (
                     <Table.Tr>
-                      <Table.Td colSpan={3}>
-                        <Text size="sm" c="dimmed">Alt kayıt bulunamadı</Text>
-                      </Table.Td>
+                      <Table.Th style={{ width: 44 }}></Table.Th>
+                      <Table.Th>Label</Table.Th>
+                      <Table.Th>Barcode</Table.Th>
+                    <Table.Th style={{ width: 50, textAlign: 'center' }}>
+                      <Button 
+                        variant="subtle" 
+                        size="md"
+                        onClick={async () => {
+                          if (!jobId) return;
+                          const { fetchJobPackages } = useJobStore.getState();
+                          await fetchJobPackages(jobId);
+                        }} 
+                        style={{ padding: '4px', minWidth: 'auto', width: '32px', height: '32px' }}
+                        title="Yenile"
+                      >
+                        <IconRefresh size={18} />
+                      </Button>
+                    </Table.Th>
                     </Table.Tr>
-                  )}
-                </Table.Tbody>
-              </Table>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {childrenByParent[pkg.id] && childrenByParent[pkg.id].length > 0 ? (
+                      renderRows(childrenByParent[pkg.id], nextDepth)
+                    ) : scansByParent[pkg.id] && scansByParent[pkg.id].length > 0 ? (
+                      scansByParent[pkg.id].map((scan: any) => (
+                        <Table.Tr key={scan.id}>
+                          <Table.Td></Table.Td>
+                          <Table.Td>
+                            <Text size="sm" c="dimmed">Taranan Barkod</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <code style={{ color: 'black' }}>{scan.barcode}</code>
+                          </Table.Td>
+                          <Table.Td>
+                          
+                          </Table.Td>
+                        </Table.Tr>
+                      ))
+                    ) : (
+                      <Table.Tr>
+                        <Table.Td colSpan={4}>
+                          <Text size="sm" c="dimmed">Alt kayıt bulunamadı</Text>
+                        </Table.Td>
+                      </Table.Tr>
+                    )}
+                  </Table.Tbody>
+                </Table>
+              </Box>
             </Table.Td>
           </Table.Tr>
         )}
-      </>
+      </React.Fragment>
     ));
   };
 
@@ -204,54 +533,140 @@ export default function JobScan() {
           <ThemeIcon className="page-title-icon" size={30} radius="md" color="green">
             <IconQrcode color="#fff" stroke={1.5} />
           </ThemeIcon>
-          {job?.material_name ? `${job.material_name} - Tarama` : 'İş Tarama'}
+          {job?.material_name ? `${normalizeText(job.material_name)}` : ''}
         </Title>
-        <Button 
-          leftSection={<IconArrowLeft size={16} />} 
-          variant="light" 
-          onClick={handleBack}
-          size="xs"
-        >
-          Geri Dön
-        </Button>
+       
       </Group>
       
       <LoadingOverlay visible={isLoading} />
       
       {/* Job Information */}
-      <Paper withBorder p="lg" mb="lg">
-        <Stack gap="md">
+      <Paper withBorder p="lg" mb="lg" style={{ position: 'relative' }}>
+        <Group justify="space-between" mb="10px">
           <Text size="lg" fw={600}>İş Bilgileri</Text>
-          
-          <Group grow>
-            <div>
-              <Text size="sm" fw={500} c="dimmed">GTIN</Text>
-              <Text size="sm" fw={500} c="black">{job?.gtin ? job.gtin : '-'}</Text>
-            </div>
-            <div>
-              <Text size="sm" fw={500} c="dimmed">SKU</Text>
-              <Text size="sm" fw={500} c="black">{job?.sku ? job.sku : '-'}</Text>
-            </div>
-            <div>
-              <Text size="sm" fw={500} c="dimmed">Lot No</Text>
-              <Text size="sm" fw={500} c="black">{job?.lot ? job.lot : '-'}</Text>
-            </div>
-          </Group>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            onClick={() => setIsJobInfoExpanded(!isJobInfoExpanded)}
+            style={{ cursor: 'pointer' }}
+          >
+            {isJobInfoExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+          </ActionIcon>
+        </Group>
+        
+        {isJobInfoExpanded && (
+          <>
+            <Grid>
+              <Grid.Col span={3}>
+                <Text size="sm" fw={500} c="dimmed">GTIN</Text>
+                <Text size="sm" fw={500} c="black">{job?.gtin ? job.gtin : '-'}</Text>
+              </Grid.Col>
+              <Grid.Col span={3}>
+                <Text size="sm" fw={500} c="dimmed">SKU</Text>
+                <Text size="sm" fw={500} c="black">{job?.sku ? job.sku : '-'}</Text>
+              </Grid.Col>
+              <Grid.Col span={3}>
+                <Text size="sm" fw={500} c="dimmed">Lot No</Text>
+                <Text size="sm" fw={500} c="black">{job?.lot ? job.lot : '-'}</Text>
+              </Grid.Col>
+              <Grid.Col span={3}>
+                <Text size="sm" fw={500} c="dimmed">Son Kullanma Tarihi</Text>
+                <Text size="sm" fw={500} c="black">{job?.expiry_date ? job.expiry_date : '-'}</Text>
+              </Grid.Col>
+            </Grid>
 
-          {hierarchyList.length > 0 && (
-            <div>
-              <Text size="sm" fw={500} c="dimmed" mb="xs">Paket Hiyerarşisi</Text>
-              {hierarchyList.map((node: any) => (
-                <Text key={node.id} size="sm" c="dimmed" mb="xs" component="div">
-                  <Badge>{node?.code}</Badge> {node?.label} İçi Adet : <code style={{ color: 'black' }}>{node?.capacity_items ?? '-'}</code>
-                </Text>
-              ))}
-            </div>
-          )}
-        </Stack>
+            {hierarchyList.length > 0 && (
+              <Grid mt="10px">
+                {hierarchyList.map((node: any) => (
+                  <Grid.Col span={3}>
+                    <Text key={node.id} size="sm" c="dimmed" mb="xs" component="div">
+                      <Badge>{node?.code}</Badge> {node?.label} İçi Adet : <code style={{ color: 'black' }}>{node?.capacity_items ?? '-'}</code>
+                    </Text>
+                  </Grid.Col>
+                ))}
+              </Grid>
+            )}
+          </>
+        )}
       </Paper>
 
+      {isCompleted && (
+        <Paper withBorder p="lg" mb="lg" bg="green.0">
+          <Group align="center" gap="sm">
+            <ThemeIcon color="green" variant="filled" radius="sm">
+              <IconCheck size={18} />
+            </ThemeIcon>
+            <div>
+              <Text fw={700} c="green">İş başarıyla tamamlandı</Text>
+              <Text size="sm" c="green.9">Toplam {scannedItems} / {job?.planned_items ?? 0}</Text>
+            </div>
+          </Group>
+        </Paper>
+      )}
+
+      {/* error message area */}
+
+
+      {(!canPrint || errorMessage) && (
+        <Paper p="sm" bg="red.0" withBorder mb="lg">
+          {!canPrint && (
+            <>
+              <Text size="sm" c="red" fw={500}>
+                ⚠️ Etiket yazdırmak için gerekli bilgiler eksik veya printer ayarlanmamış:
+              </Text>
+              <Stack gap="xs" mt="xs">
+                {!job?.material_name && <Text size="xs" c="red">• Material Name eksik</Text>}
+                {!job?.gtin && <Text size="xs" c="red">• GTIN eksik</Text>}
+                {!job?.lot && <Text size="xs" c="red">• Lot eksik</Text>}
+                {!job?.expiry_date && <Text size="xs" c="red">• Son Kullanma Tarihi eksik</Text>}
+                {!isPrinterConfigured('label') && (
+                  <Group gap="xs" align="center">
+                    <Button
+                      size="xs"
+                      variant="light"
+                      color="blue"
+                      leftSection={<IconSettings size={12} />}
+                      onClick={() => navigate('/settings/printer')}
+                    >
+                      Ayarlar
+                    </Button>
+                    <Text size="xs" c="red">Ayarlar sayfasına gitmek için tıklayınız</Text>
+                  </Group>
+                )}
+              </Stack>
+            </>
+          )}
+
+          {errorMessage && (
+            <Group gap="sm" align="flex-start">
+              <ThemeIcon color="red" size="sm" radius="sm">
+                <IconArrowLeft size={16} style={{ transform: 'rotate(45deg)' }} />
+              </ThemeIcon>
+              <div style={{ flex: 1 }}>
+                <Text size="sm" fw={500} c="red" mb="xs">
+                  KAREKOD : {lastScannedBarcode}
+                </Text>
+                
+                <Text size="sm" c="red" style={{ whiteSpace: 'pre-line' }}>
+                  {errorMessage}
+                </Text>
+              </div>
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                size="sm"
+                onClick={() => setErrorMessage(null)}
+                aria-label="Hatayı kapat"
+              >
+                <IconX size={16} />
+              </ActionIcon>
+            </Group>
+          )}
+        </Paper>
+      )}
+
       {/* Progress and Scanning */}
+      {!isCompleted && (
       <Paper withBorder p="lg">
         <Stack gap="md">
           <Group justify="space-between">
@@ -273,16 +688,24 @@ export default function JobScan() {
               <TextInput
                 {...form.getInputProps('barcode')}
                 ref={barcodeInputRef}
-                size="md"
+                size="lg"
                 flex={1}
-                autoFocus
                 placeholder="Barkod okutun..."
+                onFocus={() => {
+                  closeSidebar();
+                  setOverlay(true);
+                  setIsJobInfoExpanded(false);
+                }}
+                onBlur={() => {
+                  setOverlay(false);
+                }}
               />
               <Button 
                 type="submit" 
-                size="md" 
+                size="lg" 
                 loading={isSubmitting}
                 leftSection={<IconDeviceFloppy size={16} />}
+                disabled={!canPrint}
               >
                 Kaydet
               </Button>
@@ -290,32 +713,168 @@ export default function JobScan() {
           </form>
         </Stack>
       </Paper>
+      )}
 
+
+      <div className='p-overlay-wrapper'>
       <Paper withBorder p="lg" mt="lg">
-        <Stack gap="md">
-          <Text size="lg" fw={600}>Paketler</Text>
-          <Table striped withTableBorder  withRowBorders withColumnBorders stickyHeader stickyHeaderOffset={60}>
+        <Stack gap="md" mb="lg">
+          <Text size="lg" fw={600}>En Son Taramaya Göre Paketler</Text>
+          <Table striped withTableBorder withRowBorders withColumnBorders stickyHeader stickyHeaderOffset={60} style={{ backgroundColor: depthBgColors[0] }}>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th style={{ width: 44 }}></Table.Th>
-                <Table.Th>Label</Table.Th>
+                <Table.Th style={{ width: 100 }}>Label</Table.Th>
+                <Table.Th style={{ width: 120 }}>Taranan Adet</Table.Th>
                 <Table.Th>Barcode</Table.Th>
+                <Table.Th style={{ width: 50, textAlign: 'center' }}>
+                  <Button 
+                    variant="subtle" 
+                    size="md"
+                    onClick={async () => {
+                      if (!jobId) return;
+                      await fetchJobPackageHierarchyByLatestScan(jobId);
+                    }} 
+                    style={{ padding: '4px', minWidth: 'auto', width: '32px', height: '32px' }}
+                    title="Yenile"
+                  >
+                    <IconRefresh size={18} />
+                  </Button>
+                </Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {jobPackages && jobPackages.length > 0 ? (
-                renderRows(jobPackages)
+              {jobPackageHierarchyByLatestScan && jobPackageHierarchyByLatestScan.length > 0 ? (
+                jobPackageHierarchyByLatestScan.map((item: any) => (
+                  <Table.Tr key={item.id}>
+                    <Table.Td>{item.label ?? '-'}</Table.Td>
+                    <Table.Td>
+                      <code style={{ color: 'black' }}>{item.filled_items ?? '-'}</code>
+                    </Table.Td>
+                    <Table.Td>
+                      <code style={{ color: 'black' }}>{item.barcode ?? '-'}</code>
+                    </Table.Td>
+                    <Table.Td>
+                      <Menu withinPortal position="bottom-end" shadow="md">
+                        <Menu.Target>
+                          <ActionIcon variant="subtle" aria-label="İşlemler" color="gray">
+                            <IconDotsVertical size={18} />
+                          </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                          {item?.barcode ? (
+                            <Menu.Item leftSection={<IconPrinter size={16} />} onClick={() => 
+                              handlePrintLabel(item.barcode,
+                                job?.material_name,
+                                job?.gtin,
+                                job?.lot,
+                                job?.expiry_date,
+                                undefined
+                              )}>
+                              Etiket Yazdır
+                            </Menu.Item>
+                          ) : null}
+                          {item?.status === 'InProgress' ? (
+                            <Menu.Item leftSection={<IconLockX size={16} />} c="red">
+                              Yarım Kapat ({item.label})
+                            </Menu.Item>
+                          ) : null}
+                        </Menu.Dropdown>
+                      </Menu>
+                    </Table.Td>
+                  </Table.Tr>
+                ))
               ) : (
                 <Table.Tr>
                   <Table.Td colSpan={3}>
-                    <Text size="sm" c="dimmed">Kayıt bulunamadı</Text>
+                    <Text size="sm" c="dimmed" ta="center">Kayıt bulunamadı</Text>
                   </Table.Td>
                 </Table.Tr>
               )}
             </Table.Tbody>
           </Table>
         </Stack>
+
+        <Stack gap="md">
+          <Text size="lg" fw={600}>Son Taranan Barkodlar ({lastScanned?.length ?? 0})</Text>
+          <Table striped withTableBorder withRowBorders withColumnBorders stickyHeader stickyHeaderOffset={60} style={{ backgroundColor: depthBgColors[0] }}>
+            <Table.Thead>
+              <Table.Tr>
+                
+                <Table.Th style={{ width: 150 }}>Barkod</Table.Th>
+                <Table.Th>Tarih/Saat</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {lastScanned && lastScanned.length > 0 ? (
+                lastScanned.map((scan, index) => (
+                  <Table.Tr key={`${scan.barcode}-${scan.created_at}`}>
+                    <Table.Td>
+                      <code style={{ color: 'black', fontSize: '14px' }}>{scan.barcode}</code>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c="dimmed">{new Date(scan.created_at).toLocaleString('tr-TR')}</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                ))
+              ) : (
+                <Table.Tr>
+                  <Table.Td colSpan={3}>
+                    <Text size="sm" c="dimmed" ta="center">Henüz taranan barkod bulunmuyor</Text>
+                  </Table.Td>
+                </Table.Tr>
+              )}
+            </Table.Tbody>
+          </Table>
+        </Stack>
+        
       </Paper>
+
+      {isUserAdmin && (
+        <Paper withBorder p="lg" mt="lg">
+          <Stack gap="md">
+            <Text size="lg" fw={600}>Paketler</Text>
+            <Table striped withTableBorder  withRowBorders withColumnBorders stickyHeader stickyHeaderOffset={60} style={{ backgroundColor: depthBgColors[0] }}>
+            <Table.Thead>
+                <Table.Tr>
+                  <Table.Th style={{ width: 44 }}></Table.Th>
+                  <Table.Th>Label</Table.Th>
+                  <Table.Th>Barcode</Table.Th>
+                <Table.Th style={{ width: 50, textAlign: 'center' }}>
+                  <Button 
+                    variant="subtle" 
+                    size="md"
+                    onClick={async () => {
+                      if (!jobId) return;
+                      const { fetchJobPackages } = useJobStore.getState();
+                      await fetchJobPackages(jobId);
+                    }} 
+                    style={{ padding: '4px', minWidth: 'auto', width: '32px', height: '32px' }}
+                    title="Yenile"
+                  >
+                    <IconRefresh size={18} />
+                  </Button>
+                </Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {jobPackages && jobPackages.length > 0 ? (
+                  renderRows(jobPackages, 0)
+                ) : (
+                  <Table.Tr>
+                    <Table.Td colSpan={4}>
+                      <Text size="sm" c="dimmed">Kayıt bulunamadı</Text>
+                    </Table.Td>
+                  </Table.Tr>
+                )}
+              </Table.Tbody>
+            </Table>
+          </Stack>
+          
+        </Paper>
+       
+      )}
+      {overlay && <div style={{ height: '10px' }} className="p-overlay"></div>}
+      </div>
     </>
   );
 }

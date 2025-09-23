@@ -64,3 +64,19 @@ export interface JobPackage {
     updated_at: string;
     updated_by: string;
 }
+
+export interface JobScan {
+    id: string;
+    job_id: string;
+    job_package_id: string;
+    barcode: string;
+    created_at: string;
+    created_by: string;
+    updated_at: string;
+    updated_by: string;
+}
+
+export interface JobLastScannedItem {
+    barcode: string;
+    created_at: string;
+}

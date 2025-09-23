@@ -16,7 +16,7 @@ import {
   IconPrinter,
   IconSearch
 } from '@tabler/icons-react';
-import { useZebraPrinterStore } from './store/useZebraPrinterStore';
+import { useZebraPrinterStore, usePalletPrinterStore, useLabelPrinterStore } from './store/useZebraPrinterStore';
 
 interface BrowserPrintDevice {
   uid: string;
@@ -38,6 +38,7 @@ interface ZebraPrinterSelectorProps extends Omit<SelectProps, 'data' | 'value' |
   zplContent?: string;
   label?: string;
   disabled?: boolean;
+  storeType?: 'default' | 'pallet' | 'label'; // Hangi store'u kullanacağını belirler
 }
 
 export interface ZebraPrinterSelectorRef {
@@ -59,8 +60,21 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
     label = "Printer Seçin",
     placeholder = "Bir printer seçin",
     disabled = true,
+    storeType = 'default',
     ...selectProps
   }, ref) => {
+    // Store tipine göre doğru store'u seç
+    const getStore = () => {
+      switch (storeType) {
+        case 'pallet':
+          return usePalletPrinterStore();
+        case 'label':
+          return useLabelPrinterStore();
+        default:
+          return useZebraPrinterStore();
+      }
+    };
+
     // Zustand store'dan state'leri al
     const {
       selectedDevice,
@@ -70,7 +84,7 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
       setSelectedDevice,
       loadPrinters,
       refreshPrinters
-    } = useZebraPrinterStore();
+    } = getStore();
 
     const [isPrinting, setIsPrinting] = useState<boolean>(false);
 

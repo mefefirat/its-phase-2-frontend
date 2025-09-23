@@ -48,6 +48,11 @@ export default function UserList({
       <Table.Td style={{ width: '200px' }}>{element.full_name}</Table.Td>
       <Table.Td>{element.username}</Table.Td> 
       <Table.Td>{element.email}</Table.Td>
+      <Table.Td style={{ width: '100px', textAlign: 'center' }}>
+        <Badge color={element.role === 'admin' ? 'blue' : 'gray'}>
+          {element.role === 'admin' ? 'Admin' : 'Worker'}
+        </Badge>
+      </Table.Td>
       <Table.Td style={{ width: '120px', textAlign: 'center' }}>
         <Badge color={element.is_active ? 'green' : 'red'}>
           {element.is_active ? 'Aktif' : 'Pasif'}
@@ -109,9 +114,10 @@ export default function UserList({
           <Table.Thead style={{ backgroundColor: '#228be61f' }}>
             <Table.Tr>
               
-              <Table.Th style={{ width: '250px' }}>Ad Soyad</Table.Th>
+              <Table.Th style={{ width: '200px' }}>Ad Soyad</Table.Th>
               <Table.Th style={{ width: '130px' }}>Kullanıcı Adı</Table.Th>
               <Table.Th>E-posta</Table.Th>
+              <Table.Th style={{ width: '100px' }}>Rol</Table.Th>
               <Table.Th style={{ minWidth: 100, width: '120px' }}>Durum</Table.Th>
               <Table.Th style={{ width: 50 }}></Table.Th>
             </Table.Tr>

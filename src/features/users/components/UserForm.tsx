@@ -1,4 +1,4 @@
-import { TextInput, Button, Grid, Text, LoadingOverlay, Group, Switch, Paper, Title, ThemeIcon, PasswordInput } from '@mantine/core';
+import { TextInput, Button, Grid, Text, LoadingOverlay, Group, Switch, Paper, Title, ThemeIcon, PasswordInput, Select } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useUserStore } from '../store/userStore';
 import { useState, useEffect } from 'react';
@@ -39,6 +39,7 @@ export default function UserForm({ initialData, editMode = false, userId }: User
       username: '',
       email: '',
       full_name: '',
+      role: 'worker',
       is_active: true,
       password: '',
       password_confirmation: '',
@@ -47,6 +48,7 @@ export default function UserForm({ initialData, editMode = false, userId }: User
       username: (value) => (!value || value.trim() === '' ? 'Lütfen Kullanıcı Adı giriniz' : null),
       email: (value) => (!value || !/^\S+@\S+$/.test(value) ? 'Lütfen geçerli bir E-posta adresi giriniz' : null),
       full_name: (value) => (!value || value.trim().length < 2 ? 'Lütfen Ad Soyad giriniz' : null),
+      role: (value) => (!value ? 'Lütfen rol seçiniz' : null),
       password: (value) => {
         if (!finalEditMode && (!value || value.length < 6)) {
           return 'Şifre en az 6 karakter olmalıdır';
@@ -177,11 +179,24 @@ export default function UserForm({ initialData, editMode = false, userId }: User
                 required
               />
             </Grid.Col>
-            <Grid.Col span={12}>
+            <Grid.Col span={6}>
               <TextInput
                 label="Ad Soyad"
                 placeholder="Ör: John Doe"
                 {...form.getInputProps('full_name')}
+                withAsterisk
+                required
+              />
+            </Grid.Col>
+            <Grid.Col span={6}>
+              <Select
+                label="Rol"
+                placeholder="Rol seçiniz"
+                data={[
+                  { value: 'admin', label: 'Admin' },
+                  { value: 'worker', label: 'Worker' }
+                ]}
+                {...form.getInputProps('role')}
                 withAsterisk
                 required
               />

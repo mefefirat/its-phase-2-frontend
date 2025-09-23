@@ -67,6 +67,10 @@ export const routes: AppRoute[] = [
     element: lazy(() => import("@/features/jobs/components/JobScan")) 
   },
   
-              
+  // Settings routes
+  { 
+    path: "/settings/printer", 
+    element: lazy(() => import("@/features/settings/components/PrinterSettings")) 
+  },
   
 ];

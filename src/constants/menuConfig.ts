@@ -51,6 +51,8 @@ import {
     title: string;
     icon: React.ComponentType<any>;
     items: SubMenuItem[];
+    // Role-based visibility (admin only sections)
+    adminOnly?: boolean;
   }
   
   export interface MenuItem {
@@ -107,6 +109,7 @@ import {
           id: 'its-phase-2-definitions',
           title: 'Tanımlamalar',
           icon: IconPackage,
+          adminOnly: true,
           items: [
             {
               id: 'its-phase-2-companies',
@@ -127,6 +130,19 @@ import {
               icon: IconList
             }
           ]
+        },
+        {
+          id: 'its-phase-2-settings',
+          title: 'Ayarlar',
+          icon: IconPackage,
+          items: [
+            {
+              id: 'its-phase-2-printer',
+              label: 'Printer Ayarları',
+              path: '/settings/printer',
+              icon: IconPackageImport
+            },
+           ]
         }
         
       ]

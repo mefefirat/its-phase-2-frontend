@@ -19,7 +19,6 @@ export interface MaterialPackHierarchyItem {
     label: string;
     capacity_items: number;
     barcode_prefix: string;
-    barcode_start_value: number;
     created_at?: string;
     created_by?: string;
     updated_at?: string;

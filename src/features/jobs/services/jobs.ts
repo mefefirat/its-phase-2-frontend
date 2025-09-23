@@ -1,5 +1,5 @@
 import axiosInstance from '@/config/axios';
-import type { Job, CreateJobRequest, UpdateJobRequest, JobPackHierarchyNode, JobPackage } from '../types/job';
+import type { Job, CreateJobRequest, UpdateJobRequest, JobPackHierarchyNode, JobPackage, JobScan, JobLastScannedItem } from '../types/job';
 import type { PaginatedResponse } from '@/utils/responseHelper';
 import { useGlobalStore } from '@/store/globalStore';
 
@@ -82,9 +82,9 @@ export const deleteJob = async (jobId: string): Promise<void> => {
     return response.data;
 };
 
-export const fetchJobPackHierarchyRecursive = async (jobId: string): Promise<JobPackHierarchyNode[]> => {
+export const fetchJobPackHierarchyRecursive = async (jobId: string): Promise<{ data: JobPackHierarchyNode[]; count?: number } | JobPackHierarchyNode[]> => {
     const response = await axiosInstance.get(`/v1/job-pack-hierarchies/by-job/${jobId}/recursive`);
-    return response.data as JobPackHierarchyNode[];
+    return response.data as { data: JobPackHierarchyNode[]; count?: number } | JobPackHierarchyNode[];
 };
 
 export const createJobScan = async (payload: CreateJobScanRequest) => {
@@ -97,4 +97,24 @@ export const fetchJobPackages = async (jobId: string, parentId?: string | null):
     const url = parentId ? `${basePath}?parent_id=${encodeURIComponent(parentId)}` : basePath;
     const response = await axiosInstance.get(url);
     return response.data as JobPackage[];
+};
+
+export const fetchJobScans = async (jobPackageId: string): Promise<JobScan[]> => {
+    const response = await axiosInstance.get('/v1/job-scans', {
+        params: { job_package_id: jobPackageId }
+    });
+    return response.data as JobScan[];
+};
+
+export const fetchJobPackageHierarchyByLatestScan = async (jobId: string): Promise<JobPackHierarchyNode[]> => {
+    const response = await axiosInstance.get(`/v1/job-packages/hierarchy/by-latest-scan/${jobId}`);
+    return response.data as JobPackHierarchyNode[];
+};
+
+export const fetchLastScannedByJob = async (jobId: string): Promise<JobLastScannedItem[]> => {
+    const response = await axiosInstance.get(`/v1/job-scans/last-scanned/${jobId}`);
+    // API returns: { status: 'success', data: [...] }
+    const payload = response.data as { status?: string; data: JobLastScannedItem[] } | JobLastScannedItem[];
+    if (Array.isArray(payload)) return payload;
+    return payload.data ?? [];
 };

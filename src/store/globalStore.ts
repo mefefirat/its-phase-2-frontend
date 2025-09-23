@@ -30,6 +30,8 @@ interface KeycloakUser {
   // Company access bilgileri
   companyAccesses: CompanyAccess[];
   isGlobalAdmin: boolean;
+  // Database role (admin/worker)
+  role?: 'admin' | 'worker';
   // Default company ID
   defaultCompanyId?: string;
   // Validation flags
@@ -58,6 +60,11 @@ interface GlobalState {
   settings: {
     theme: 'light' | 'dark';
     language: string;
+    // Printer ayarları
+    printers: {
+      palletPrinter: string | null; // Palet için seçili printer
+      labelPrinter: string | null;  // Diğer etiketler için seçili printer
+    };
   };
   
   // Loading states
@@ -79,9 +86,11 @@ interface GlobalState {
   setFullName: (fullName: string | null) => void;
   setAuthenticated: (authenticated: boolean) => void;
   setSettings: (settings: Partial<GlobalState['settings']>) => void;
+  setPrinterSettings: (printers: Partial<GlobalState['settings']['printers']>) => void;
   setLoading: (loading: boolean) => void;
   setUserLoading: (loading: boolean) => void;
   setSessionInfo: (sessionInfo: Partial<GlobalState['sessionInfo']>) => void;
+  setUserRole: (role: 'admin' | 'worker') => void;
   
   // Keycloak specific actions
   updateUserFromKeycloak: (keycloakData: {
@@ -113,6 +122,10 @@ const initialState = {
   settings: {
     theme: 'light' as const,
     language: 'tr',
+    printers: {
+      palletPrinter: null,
+      labelPrinter: null,
+    },
   },
   isLoading: false,
   isUserLoading: false,
@@ -174,6 +187,15 @@ export const useGlobalStore = create<GlobalState>()(
           settings: { ...state.settings, ...newSettings }
         })),
       
+      // Printer ayarlarını güncelleme
+      setPrinterSettings: (newPrinters) =>
+        set((state) => ({
+          settings: {
+            ...state.settings,
+            printers: { ...state.settings.printers, ...newPrinters }
+          }
+        })),
+      
       // Loading states
       setLoading: (loading) => set({ isLoading: loading }),
       setUserLoading: (loading) => set({ isUserLoading: loading }),
@@ -182,6 +204,12 @@ export const useGlobalStore = create<GlobalState>()(
       setSessionInfo: (newSessionInfo) =>
         set((state) => ({
           sessionInfo: { ...state.sessionInfo, ...newSessionInfo }
+        })),
+      
+      // Kullanıcı role'ünü güncelleme
+      setUserRole: (role) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, role } : null
         })),
       
       // Keycloak'tan kullanıcı bilgilerini güncelleme
@@ -372,6 +400,25 @@ export const useIsAdmin = () => {
   return isAdmin;
 };
 
+// Kullanıcının database role'ünü kontrol et
+export const useUserRole = () => {
+  const user = useGlobalStore((state) => state.user);
+  return user?.role || 'worker'; // Default olarak worker
+};
+
+// Kullanıcı admin mi kontrol et (hem Keycloak hem de database role)
+export const useIsUserAdmin = () => {
+  const isAdmin = useGlobalStore((state) => state.isAdmin);
+  const userRole = useUserRole();
+  return isAdmin || userRole === 'admin';
+};
+
+// Kullanıcı role'ünü güncellemek için hook
+export const useSetUserRole = () => {
+  const setUserRole = useGlobalStore((state) => state.setUserRole);
+  return setUserRole;
+};
+
 export const useCurrentUser = () => {
   const user = useGlobalStore((state) => state.user);
   const isAuthenticated = useGlobalStore((state) => state.isAuthenticated);
@@ -392,4 +439,31 @@ export const useLoadingStates = () => {
   const isLoading = useGlobalStore((state) => state.isLoading);
   const isUserLoading = useGlobalStore((state) => state.isUserLoading);
   return { isLoading, isUserLoading };
+};
+
+// Printer ayarları için hook'lar
+export const usePrinterSettings = () => {
+  const printers = useGlobalStore((state) => state.settings?.printers || { palletPrinter: null, labelPrinter: null });
+  const setPrinterSettings = useGlobalStore((state) => state.setPrinterSettings);
+  return { printers, setPrinterSettings };
+};
+
+export const usePalletPrinter = () => {
+  const palletPrinter = useGlobalStore((state) => state.settings?.printers?.palletPrinter || null);
+  const setPrinterSettings = useGlobalStore((state) => state.setPrinterSettings);
+  return { 
+    palletPrinter, 
+    setPalletPrinter: (printerId: string | null) => 
+      setPrinterSettings({ palletPrinter: printerId })
+  };
+};
+
+export const useLabelPrinter = () => {
+  const labelPrinter = useGlobalStore((state) => state.settings?.printers?.labelPrinter || null);
+  const setPrinterSettings = useGlobalStore((state) => state.setPrinterSettings);
+  return { 
+    labelPrinter, 
+    setLabelPrinter: (printerId: string | null) => 
+      setPrinterSettings({ labelPrinter: printerId })
+  };
 };
