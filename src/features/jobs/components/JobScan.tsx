@@ -1,4 +1,5 @@
-import { TextInput, Button, Group, Text, LoadingOverlay, Paper, Title, ThemeIcon, Stack, Badge, Progress, Table, ActionIcon, Box, Grid, Menu } from '@mantine/core';
+import { TextInput, Button, Group, Text, LoadingOverlay, Paper, Title, ThemeIcon, Stack, Badge, Progress, Table, ActionIcon, Box, Grid, Menu, Modal, Loader } from '@mantine/core';
+import { modals } from '@mantine/modals';
 import { useForm } from '@mantine/form';
 import { useJobStore } from '../store/jobStore';
 import { useSidebarStore } from '@/store/menuStore';
@@ -7,7 +8,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { IconArrowLeft, IconDeviceFloppy, IconQrcode, IconPlus, IconMinus, IconPrinter, IconSettings, IconX, IconChevronDown, IconChevronUp, IconCheck, IconLockX, IconDotsVertical, IconRefresh } from '@tabler/icons-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Job, UpdateJobRequest } from '../types/job';
-import { printWithLabelPrinter, isPrinterConfigured } from '@/utils/printerUtils';
+import { printWithLabelPrinter, isPrinterConfigured, ensurePrinterReady } from '@/utils/printerUtils';
 import { normalizeText } from '@/utils/normalizeText';
 import { pharmaValidator } from '@/utils/pharmaValidator';
 
@@ -33,6 +34,8 @@ export default function JobScan() {
   const depthBgColors = ['#ffffff', '#f8f9fa', '#f1f3f5', '#e9ecef', '#dee2e6'];
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const [overlay, setOverlay] = useState(false);
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [isCheckingPrinter, setIsCheckingPrinter] = useState(false);
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const { closeSidebar } = useSidebarStore();
@@ -216,6 +219,16 @@ export default function JobScan() {
   //   }
   // }, []);
 
+  // Modal açıldığında input'a odaklan
+  useEffect(() => {
+    if (isScanModalOpen) {
+      setTimeout(() => {
+        barcodeInputRef.current?.focus();
+        barcodeInputRef.current?.select();
+      }, 100);
+    }
+  }, [isScanModalOpen]);
+
 
   const handleBack = () => {
     navigate(`/jobs/edit/${jobId}`);
@@ -387,6 +400,7 @@ export default function JobScan() {
 
   const toggleExpand = async (parentId: string, siblingIds?: string[]) => {
     if (!jobId) return;
+    const willExpand = !expandedRows[parentId];
     setExpandedRows((prev) => {
       const isExpanding = !prev[parentId];
       const next: Record<string, boolean> = { ...prev, [parentId]: !prev[parentId] };
@@ -400,19 +414,20 @@ export default function JobScan() {
       }
       return next;
     });
-    // If expanding and children not loaded yet, fetch
-    if (!expandedRows[parentId] && !childrenByParent[parentId]) {
+    // Always re-fetch fresh data when expanding
+    if (willExpand) {
       try {
         setLoadingChildren((prev) => ({ ...prev, [parentId]: true }));
         const { fetchJobPackages } = useJobStore.getState();
         const children = await fetchJobPackages(jobId, parentId);
-        console.log(children);
         setChildrenByParent((prev) => ({ ...prev, [parentId]: children }));
-        // If there are no child packages, load scans for this package
+        // If there are no child packages, load scans for this package; otherwise clear scans list
         if (!children || children.length === 0) {
           const { fetchJobScans } = useJobStore.getState();
           const scans = await fetchJobScans(parentId);
           setScansByParent((prev) => ({ ...prev, [parentId]: scans }));
+        } else {
+          setScansByParent((prev) => ({ ...prev, [parentId]: [] }));
         }
       } catch (e) {
         // error notification is handled in store
@@ -420,6 +435,32 @@ export default function JobScan() {
         setLoadingChildren((prev) => ({ ...prev, [parentId]: false }));
       }
     }
+  };
+
+  const handleClickClosePackage = (jobPackageId: string) => {
+    console.log('jobPackageId', jobPackageId);
+    modals.openConfirmModal({
+      title: 'Yarım kapatma onayı',
+      centered: true,
+      children: (
+        <Text size="sm">
+          Bu paketi yarım kapatmak üzeresiniz. Bu işlem geri alınamaz. Devam etmek istediğinize emin misiniz?
+        </Text>
+      ),
+      labels: { confirm: 'Evet, kapat', cancel: 'Vazgeç' },
+      confirmProps: { color: 'red' },
+      onConfirm: async () => {
+        try {
+          await useJobStore.getState().forceClosePackage(jobPackageId);
+          if (jobId) {
+            await fetchJobPackageHierarchyByLatestScan(jobId);
+            await useJobStore.getState().fetchLastScannedByJob(jobId);
+          }
+        } catch (e) {
+          // error notification is handled in store
+        }
+      },
+    });
   };
 
   const renderRows = (items: any[], depth: number = 0) => {
@@ -526,6 +567,8 @@ export default function JobScan() {
     ));
   };
 
+ 
+
   return (
     <>
       <Group className='page-header' justify="space-between" mb="lg">
@@ -607,7 +650,7 @@ export default function JobScan() {
       {/* error message area */}
 
 
-      {(!canPrint || errorMessage) && (
+      {(!canPrint) && (
         <Paper p="sm" bg="red.0" withBorder mb="lg">
           {!canPrint && (
             <>
@@ -637,8 +680,40 @@ export default function JobScan() {
             </>
           )}
 
-          {errorMessage && (
-            <Group gap="sm" align="flex-start">
+         
+        </Paper>
+      )}
+
+      <Paper withBorder p="lg" mb="lg">
+        <Button 
+          onClick={async () => {
+            // Modal'ı hemen aç, ardından arka planda printer kontrolü yap
+            setIsScanModalOpen(true);
+            setErrorMessage(null);
+            setIsCheckingPrinter(true);
+            const readiness = await ensurePrinterReady('label');
+            setIsCheckingPrinter(false);
+            if (!readiness.ready) {
+              setErrorMessage(readiness.message || 'Printer hazır değil');
+            }
+          }}
+        > KAREKOD OKUTMAYA BAŞLA</Button>
+      </Paper>
+
+      {/* Progress and Scanning - Modal */}
+      {!isCompleted && (
+        <Modal opened={isScanModalOpen} onClose={() => setIsScanModalOpen(false)} title="Taramaya Başla" size="xl" centered overlayProps={{ opacity: 2, blur: 5, color: '#000' }} p="xl">
+          <Stack gap="md">
+
+          {isCheckingPrinter && (
+            <Group gap="sm" align="center" bg="yellow.0" p="lg">
+              <Loader size="sm" />
+              <Text size="sm">Printer kontrol ediliyor...</Text>
+            </Group>
+          )}
+
+          {errorMessage && !isCheckingPrinter && (
+            <Group gap="sm" align="flex-start" bg="red.0" p="lg">
               <ThemeIcon color="red" size="sm" radius="sm">
                 <IconArrowLeft size={16} style={{ transform: 'rotate(45deg)' }} />
               </ThemeIcon>
@@ -662,61 +737,48 @@ export default function JobScan() {
               </ActionIcon>
             </Group>
           )}
-        </Paper>
-      )}
 
-      {/* Progress and Scanning */}
-      {!isCompleted && (
-      <Paper withBorder p="lg">
-        <Stack gap="md">
-          <Group justify="space-between">
-            <Text size="lg" fw={600}>Tarama İlerlemesi</Text>
-            <Text size="lg" fw={600}>{scannedItems} / {job?.planned_items ?? 0}</Text>
-          </Group>
-          
-          <Progress 
-            value={(scannedItems && job?.planned_items ? Math.min(100, (scannedItems / (job?.planned_items || 1)) * 100) : 0)} 
-            size="lg" 
-            striped 
-            animated 
-          />
-
-          <Text size="md" fw={500} c="dimmed">KAREKOD OKUT</Text>
-          
-          <form onSubmit={form.onSubmit(handleScanSubmit)} autoComplete='off'>
+            
             <Group justify="space-between">
-              <TextInput
-                {...form.getInputProps('barcode')}
-                ref={barcodeInputRef}
-                size="lg"
-                flex={1}
-                placeholder="Barkod okutun..."
-                onFocus={() => {
-                  closeSidebar();
-                  setOverlay(true);
-                  setIsJobInfoExpanded(false);
-                }}
-                onBlur={() => {
-                  setOverlay(false);
-                }}
-              />
-              <Button 
-                type="submit" 
-                size="lg" 
-                loading={isSubmitting}
-                leftSection={<IconDeviceFloppy size={16} />}
-                disabled={!canPrint}
-              >
-                Kaydet
-              </Button>
+              <Text size="lg" fw={600}>İlerleme Durumu</Text>
+              <Text size="lg" fw={600}>{scannedItems} / {job?.planned_items ?? 0}</Text>
             </Group>
-          </form>
-        </Stack>
-      </Paper>
+            
+            <Progress 
+              value={(scannedItems && job?.planned_items ? Math.min(100, (scannedItems / (job?.planned_items || 1)) * 100) : 0)} 
+              size="lg" 
+              striped 
+              animated 
+            />
+
+            <Text size="md" fw={500} c="dimmed">KAREKOD OKUT</Text>
+            
+            <form onSubmit={form.onSubmit(handleScanSubmit)} autoComplete='off'>
+              <Group justify="space-between" mb="xl">
+                <TextInput
+                  {...form.getInputProps('barcode')}
+                  ref={barcodeInputRef}
+                  size="lg"
+                  flex={1}
+                  placeholder="Barkod okutun..."
+                  
+                />
+                <Button 
+                  type="submit" 
+                  size="lg" 
+                  loading={isSubmitting}
+                  leftSection={<IconDeviceFloppy size={16} />}
+                  disabled={!canPrint}
+                >
+                  Kaydet
+                </Button>
+              </Group>
+            </form>
+          </Stack>
+        </Modal>
       )}
 
 
-      <div className='p-overlay-wrapper'>
       <Paper withBorder p="lg" mt="lg">
         <Stack gap="md" mb="lg">
           <Text size="lg" fw={600}>En Son Taramaya Göre Paketler</Text>
@@ -774,7 +836,11 @@ export default function JobScan() {
                             </Menu.Item>
                           ) : null}
                           {item?.status === 'InProgress' ? (
-                            <Menu.Item leftSection={<IconLockX size={16} />} c="red">
+                            <Menu.Item
+                              leftSection={<IconLockX size={16} />}
+                              c="red"
+                              onClick={() => handleClickClosePackage(item.id)}
+                            >
                               Yarım Kapat ({item.label})
                             </Menu.Item>
                           ) : null}
@@ -873,8 +939,6 @@ export default function JobScan() {
         </Paper>
        
       )}
-      {overlay && <div style={{ height: '10px' }} className="p-overlay"></div>}
-      </div>
     </>
   );
 }

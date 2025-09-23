@@ -119,3 +119,55 @@ export const isPrinterConfigured = (printerType: 'pallet' | 'label'): boolean =>
     return printers.labelPrinter !== null;
   }
 };
+
+/**
+ * Seçili printer'in gerçekten hazır olup olmadığını güçlü şekilde kontrol eder
+ * - BrowserPrint var mı?
+ * - Ayarlarda printer seçili mi?
+ * - Mevcut cihaz listesinde bu printer var mı?
+ * - Cihaz listesi yoksa yeniden yüklemeyi dener
+ */
+export const ensurePrinterReady = async (
+  printerType: 'pallet' | 'label' = 'label'
+): Promise<{ ready: boolean; message?: string }> => {
+  // BrowserPrint kontrolü
+  if (typeof window === 'undefined' || typeof (window as any).BrowserPrint === 'undefined') {
+    return {
+      ready: false,
+      message: 'Zebra BrowserPrint bulunamadı. Uygulamanın yüklü ve çalışır olduğundan emin olun.'
+    };
+  }
+
+  const printers = useGlobalStore.getState().settings?.printers || { palletPrinter: null, labelPrinter: null };
+  const configuredPrinterId = printerType === 'pallet' ? printers.palletPrinter : printers.labelPrinter;
+
+  if (!configuredPrinterId) {
+    return { ready: false, message: 'Printer seçilmedi. Lütfen ayarlardan bir printer seçin.' };
+  }
+
+  const store = useZebraPrinterStore.getState();
+
+  // Her tetiklemede listeyi tazele (USB çıkartma/takma gibi durumları yakalamak için)
+  try {
+    await store.loadPrinters();
+  } catch (e) {
+    // Yükleme hatası store.error içinde de tutuluyor
+  }
+
+  const device = useZebraPrinterStore.getState().devices.find(d => d.uid === configuredPrinterId);
+  if (!device) {
+    return {
+      ready: false,
+      message: 'Seçilen printer bağlı değil ya da bulunamadı. Lütfen bağlantıyı kontrol edin.'
+    };
+  }
+
+  // BrowserPrint servisinin ayağa kalkık olduğuna dair hızlı sağlık kontrolü
+  try {
+    await fetch('http://127.0.0.1:9100/available', { method: 'GET' });
+  } catch {
+    return { ready: false, message: 'BrowserPrint servisine ulaşılamıyor. Uygulama çalışıyor mu?' };
+  }
+
+  return { ready: true };
+};

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import { MantineProvider } from "@mantine/core";
+import { ModalsProvider } from '@mantine/modals';
 import { Notifications } from '@mantine/notifications';
 import { Router } from "@/Router";
 import '@mantine/dates/styles.css';
@@ -17,8 +18,10 @@ const App = () => {
 
   return (
     <MantineProvider>
-      <Notifications position="top-right" zIndex={1000} />
-      <Router />
+      <ModalsProvider>
+        <Notifications position="top-right" zIndex={1000} />
+        <Router />
+      </ModalsProvider>
     </MantineProvider>
   );
 };

@@ -118,3 +118,8 @@ export const fetchLastScannedByJob = async (jobId: string): Promise<JobLastScann
     if (Array.isArray(payload)) return payload;
     return payload.data ?? [];
 };
+
+export const forceCloseJobPackage = async (jobPackageId: string) => {
+    const response = await axiosInstance.patch(`/v1/job-scans/force-close-package/${jobPackageId}`);
+    return response.data;
+};

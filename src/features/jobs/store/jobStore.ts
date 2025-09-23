@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import React from 'react';
 import { notifications } from '@mantine/notifications';
 import { IconCheck, IconX } from '@tabler/icons-react';
-import { fetchJobs, insertJob, updateJob, deleteJob, fetchJobById, fetchJobsList, fetchJobPackHierarchyRecursive, createJobScan, fetchJobPackages, fetchJobScans, fetchJobPackageHierarchyByLatestScan, fetchLastScannedByJob } from '../services/jobs';
+import { fetchJobs, insertJob, updateJob, deleteJob, fetchJobById, fetchJobsList, fetchJobPackHierarchyRecursive, createJobScan, fetchJobPackages, fetchJobScans, fetchJobPackageHierarchyByLatestScan, fetchLastScannedByJob, forceCloseJobPackage } from '../services/jobs';
 import type { CreateJobScanRequest } from '../services/jobs';
 import type { Job, CreateJobRequest, UpdateJobRequest, JobPackHierarchyNode, JobPackage, JobScan, JobLastScannedItem } from '../types/job';
 import type { PaginatedResponse } from '@/utils/responseHelper';
@@ -43,6 +43,7 @@ interface JobState {
     editJob: (jobId: string, updatedData: UpdateJobRequest) => Promise<void>;
     removeJob: (jobId: string) => Promise<void>;
     scanJob: (payload: CreateJobScanRequest) => Promise<any>;
+    forceClosePackage: (jobPackageId: string) => Promise<any>;
 }
 
 export const useJobStore = create<JobState>((set, get) => ({
@@ -365,6 +366,31 @@ export const useJobStore = create<JobState>((set, get) => ({
             notifications.show({
                 title: 'Hata!',
                 message: errorMessage || 'Barkod okutulurken bir hata oluştu.',
+                color: 'red',
+                icon: React.createElement(IconX, { size: 16 }),
+                autoClose: 5000,
+            });
+            throw error;
+        }
+    },
+
+    forceClosePackage: async (jobPackageId) => {
+        try {
+            const response = await forceCloseJobPackage(jobPackageId);
+            notifications.show({
+                title: 'Başarılı',
+                message: 'Paket zorla kapatıldı.',
+                color: 'green',
+                icon: React.createElement(IconCheck, { size: 16 }),
+                autoClose: 3000,
+            });
+            return response;
+        } catch (error) {
+            console.error('Failed to force close package', error);
+            const errorMessage = extractErrorMessage(error);
+            notifications.show({
+                title: 'Hata!',
+                message: errorMessage || 'Paket kapatılırken bir hata oluştu.',
                 color: 'red',
                 icon: React.createElement(IconX, { size: 16 }),
                 autoClose: 5000,
