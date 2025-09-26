@@ -284,7 +284,15 @@ export const diagnosePrinterIssues = async (
   let serviceReachable = false;
   if (browserPrintAvailable) {
     try {
-      await fetch('http://127.0.0.1:9100/available', { method: 'GET' });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 saniye timeout
+      
+      await fetch('http://127.0.0.1:9100/available', { 
+        method: 'GET',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
       serviceReachable = true;
     } catch {
       issues.push('BrowserPrint servisine ulaşılamıyor');

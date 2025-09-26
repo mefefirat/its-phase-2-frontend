@@ -235,16 +235,40 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
           )}
           <Alert
             icon={<IconAlertCircle size={16} />}
-            title="Bağlantı Hatası"
+            title="Printer Bağlantı Hatası"
             color="red"
             variant="light"
-            
           >
             <Stack gap="sm">
               <Text size="sm">{error}</Text>
-              <Text size="xs" c="dimmed">
-                Lütfen Zebra BrowserPrint uygulamasının yüklü ve çalışır durumda olduğundan emin olun.
-              </Text>
+              
+              {/* Hata tipine göre farklı yardım mesajları */}
+              {error.includes('servisi bulunamadı') ? (
+                <Text size="xs" c="dimmed">
+                  • Zebra BrowserPrint uygulamasını indirin ve yükleyin<br/>
+                  • Uygulamanın çalıştığından emin olun<br/>
+                  • Tarayıcınızı yenileyin
+                </Text>
+              ) : error.includes('zaman aşımı') ? (
+                <Text size="xs" c="dimmed">
+                  • BrowserPrint servisini yeniden başlatın<br/>
+                  • Bilgisayarınızın performansını kontrol edin<br/>
+                  • Güvenlik duvarı ayarlarını kontrol edin
+                </Text>
+              ) : error.includes('bağlanılamadı') ? (
+                <Text size="xs" c="dimmed">
+                  • BrowserPrint uygulamasının çalıştığından emin olun<br/>
+                  • Port 9100'ün açık olduğunu kontrol edin<br/>
+                  • Antiviral yazılımınızı kontrol edin
+                </Text>
+              ) : (
+                <Text size="xs" c="dimmed">
+                  • Zebra BrowserPrint uygulamasının yüklü ve çalışır durumda olduğundan emin olun<br/>
+                  • Printer'ın USB ile bağlı olduğunu kontrol edin<br/>
+                  • Sayfa yenilemeyi deneyin
+                </Text>
+              )}
+              
               {showRefreshButton && (
                 <Button
                   leftSection={<IconRefresh size={16} />}
@@ -252,7 +276,7 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
                   variant="light"
                   onClick={refreshPrinters}
                 >
-                  Tekrar Dene
+                  Yeniden Dene
                 </Button>
               )}
             </Stack>
