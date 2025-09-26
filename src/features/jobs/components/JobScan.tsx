@@ -8,9 +8,10 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { IconArrowLeft, IconDeviceFloppy, IconQrcode, IconPlus, IconMinus, IconPrinter, IconSettings, IconX, IconChevronDown, IconChevronUp, IconCheck, IconLockX, IconDotsVertical, IconRefresh } from '@tabler/icons-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Job, UpdateJobRequest } from '../types/job';
-import { printWithLabelPrinter, isPrinterConfigured, ensurePrinterReady, diagnosePrinterIssues } from '@/utils/printerUtils';
+import { diagnosePrinterIssues } from '@/utils/printerUtils';
 import { normalizeText } from '@/utils/normalizeText';
 import { pharmaValidator } from '@/utils/pharmaValidator';
+import ZebraPrinterSelector, { ZebraPrinterSelectorRef } from '@/shared/printer/ZebraPrinterSelector';
 
 export default function JobScan() {
   const { fetchJobById, fetchJobPackHierarchyRecursive, jobPackHierarchy } = useJobStore();
@@ -38,9 +39,15 @@ export default function JobScan() {
   const [isCheckingPrinter, setIsCheckingPrinter] = useState(false);
   const [printerDiagnosis, setPrinterDiagnosis] = useState<any>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [selectedPalletPrinter, setSelectedPalletPrinter] = useState<any>(null);
+  const [selectedLabelPrinter, setSelectedLabelPrinter] = useState<any>(null);
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const { closeSidebar } = useSidebarStore();
+  
+  // Printer selector ref'leri
+  const palletPrinterSelectorRef = useRef<ZebraPrinterSelectorRef>(null);
+  const labelPrinterSelectorRef = useRef<ZebraPrinterSelectorRef>(null);
   
   const jobId = params.id;
 
@@ -60,8 +67,8 @@ export default function JobScan() {
   // Yazdırma için gerekli bilgilerin kontrolü
   const checkPrintRequirements = () => {
     const hasRequiredFields = !!(job?.material_name && job?.gtin && job?.lot && job?.expiry_date);
-    const hasPrinter = isPrinterConfigured('label');
-    setCanPrint(hasRequiredFields && hasPrinter);
+    const hasPrinters = !!(selectedPalletPrinter && selectedLabelPrinter);
+    setCanPrint(hasRequiredFields && hasPrinters);
   };
 
   // Yazdırma fonksiyonu
@@ -73,8 +80,8 @@ export default function JobScan() {
     expiry_date?: string | null,
     code?: string
   ) => {
-    if (!isPrinterConfigured('label')) {
-      setErrorMessage('Etiket printer\'ı ayarlanmamış. Lütfen ayarlar sayfasından printer seçin.');
+    if (!selectedLabelPrinter) {
+      setErrorMessage('Label printer seçilmemiş. Lütfen yazdırma için label printer seçin.');
       return;
     }
 
@@ -96,7 +103,7 @@ export default function JobScan() {
       }
     };
 
-/*
+
     const zplContent = `^XA
 ^PW479
 ^LL319
@@ -128,27 +135,21 @@ export default function JobScan() {
 ^FO0,290^FB479,1,0,C,0^FD${barcode}^FS
 
 ^XZ`;
-*/
 
-const zplContent = `
-^XA
 
-^FO15,30
-^BXN,4,200
-^FD(01)00386912345676(21)98010002428828(10)LT011312321(17)291031^FS
 
-^FO120,30^A0N,18,18^FD(01) 00386912345676^FS
-^FO120,55^A0N,18,18^FD(21) 98010002428828^FS
-^FO120,80^A0N,18,18^FD(10) LT011312321^FS
-^FO120,105^A0N,18,18^FD(17) 291031^FS
-
-^XZ
-`;
 
     console.log("Yazdırma işlemi başlatılıyor...");
     
     try {
-      const result = await printWithLabelPrinter(zplContent);
+      // Seçilen label printer ile yazdırma yapacağız
+      const result = await new Promise<{ success: boolean; error?: string }>((resolve) => {
+        selectedLabelPrinter.send(
+          zplContent,
+          () => resolve({ success: true }),
+          (error: string) => resolve({ success: false, error })
+        );
+      });
       console.log("Print result:", result);
       
       if (result.success) {
@@ -156,11 +157,9 @@ const zplContent = `
         setErrorMessage(null); // Clear any previous errors on success
       } else {
         console.error("Yazdırma hatası:", result);
-        let errorMsg = `Yazdırma hatası: ${result.message}`;
+        let errorMsg = `Yazdırma hatası: ${result.error || 'Bilinmeyen hata'}`;
         
         if (result.error) {
-          errorMsg += ` - ${result.error}`;
-          
           // Özel hata mesajları ve çözüm önerileri
           if (result.error.includes('connection closed') || result.error.includes('writing to port')) {
             errorMsg += '\n\n💡 Çözüm önerileri:\n';
@@ -221,7 +220,7 @@ const zplContent = `
   // Job verisi yüklendiğinde yazdırma gereksinimlerini kontrol et
   useEffect(() => {
     checkPrintRequirements();
-  }, [job]);
+  }, [job, selectedPalletPrinter, selectedLabelPrinter]);
 
   // Paket hiyerarşisini sayfa açılışında yükle
   useEffect(() => {
@@ -655,6 +654,8 @@ const zplContent = `
             {isJobInfoExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
           </ActionIcon>
         </Group>
+
+       
         
         {isJobInfoExpanded && (
           <>
@@ -692,6 +693,46 @@ const zplContent = `
         )}
       </Paper>
 
+      <Paper withBorder p="lg" mb="lg">
+          <Title order={3} mb="md">Printer Ayarları</Title>
+          <Grid>
+            <Grid.Col span={6}>
+              <ZebraPrinterSelector
+                ref={palletPrinterSelectorRef}
+                label="Palet Printeri Seçin"
+                placeholder="Palet yazdırmak için bir printer seçin"
+                storeType="pallet"
+                showRefreshButton={true}
+                autoLoadOnMount={true}
+                disabled={false}
+                onChange={(device, deviceId) => {
+                  setSelectedPalletPrinter(device);
+                }}
+                onError={(error) => {
+                  console.error('Palet printer hatası:', error);
+                }}
+              />
+            </Grid.Col>
+            <Grid.Col span={6}>
+              <ZebraPrinterSelector
+                ref={labelPrinterSelectorRef}
+                label="Etiket Printeri Seçin"
+                placeholder="Etiket yazdırmak için bir printer seçin"
+                storeType="label"
+                showRefreshButton={true}
+                autoLoadOnMount={true}
+                disabled={false}
+                onChange={(device, deviceId) => {
+                  setSelectedLabelPrinter(device);
+                }}
+                onError={(error) => {
+                  console.error('Label printer hatası:', error);
+                }}
+              />
+            </Grid.Col>
+          </Grid>
+        </Paper>
+
       {isCompleted && (
         <Paper withBorder p="lg" mb="lg" bg="green.0">
           <Group align="center" gap="sm">
@@ -714,36 +755,15 @@ const zplContent = `
           {!canPrint && (
             <>
               <Text size="sm" c="red" fw={500}>
-                ⚠️ Etiket yazdırmak için gerekli bilgiler eksik veya printer ayarlanmamış:
+                ⚠️ Etiket yazdırmak için gerekli bilgiler eksik veya printer seçilmemiş:
               </Text>
               <Stack gap="xs" mt="xs">
                 {!job?.material_name && <Text size="xs" c="red">• Material Name eksik</Text>}
                 {!job?.gtin && <Text size="xs" c="red">• GTIN eksik</Text>}
                 {!job?.lot && <Text size="xs" c="red">• Lot eksik</Text>}
                 {!job?.expiry_date && <Text size="xs" c="red">• Son Kullanma Tarihi eksik</Text>}
-                {!isPrinterConfigured('label') && (
-                  <Group gap="xs" align="center">
-                    <Button
-                      size="xs"
-                      variant="light"
-                      color="blue"
-                      leftSection={<IconSettings size={12} />}
-                      onClick={() => navigate('/settings/printer')}
-                    >
-                      Ayarlar
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant="light"
-                      color="orange"
-                      onClick={handlePrinterDiagnosis}
-                      loading={isCheckingPrinter}
-                    >
-                      Printer Tanısı
-                    </Button>
-                    <Text size="xs" c="red">Ayarlar sayfasına gitmek için tıklayınız</Text>
-                  </Group>
-                )}
+                {!selectedLabelPrinter && <Text size="xs" c="red">• Label Printer seçilmemiş</Text>}
+                {!selectedPalletPrinter && <Text size="xs" c="red">• Palet Printer seçilmemiş</Text>}
               </Stack>
             </>
           )}
@@ -839,15 +859,9 @@ const zplContent = `
       <Paper withBorder p="lg" mb="lg">
         <Button 
           onClick={async () => {
-            // Modal'ı hemen aç, ardından arka planda printer kontrolü yap
+            // Modal'ı hemen aç, printer kontrolü yapmayacağız çünkü artık manuel seçim yapıyoruz
             setIsScanModalOpen(true);
             setErrorMessage(null);
-            setIsCheckingPrinter(true);
-            const readiness = await ensurePrinterReady('label');
-            setIsCheckingPrinter(false);
-            if (!readiness.ready) {
-              setErrorMessage(readiness.message || 'Printer hazır değil');
-            }
           }}
         > KAREKOD OKUTMAYA BAŞLA</Button>
       </Paper>

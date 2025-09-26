@@ -52,12 +52,14 @@ export default function UserList({
         <Badge color={
           element.role === 'admin' ? 'blue' : 
           element.role === 'teamleader' ? 'green' :
+          element.role === 'operator' ? 'cyan' :
           element.role === 'workkerf1' ? 'orange' :
           element.role === 'workkerf2' ? 'purple' : 
           'gray'
         }>
           {element.role === 'admin' ? 'Admin' : 
            element.role === 'teamleader' ? 'Team Leader' :
+           element.role === 'operator' ? 'Operator' :
            element.role === 'workkerf1' ? 'Faz-I Operatoru' :
            element.role === 'workkerf2' ? 'Faz-II Operatoru' :
            'Bilinmeyen'}

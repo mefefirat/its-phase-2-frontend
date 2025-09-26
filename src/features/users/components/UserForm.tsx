@@ -39,7 +39,7 @@ export default function UserForm({ initialData, editMode = false, userId }: User
       username: '',
       email: '',
       full_name: '',
-      role: 'worker',
+      role: 'operator',
       is_active: true,
       password: '',
       password_confirmation: '',
@@ -195,7 +195,7 @@ export default function UserForm({ initialData, editMode = false, userId }: User
                 data={[
                   { value: 'admin', label: 'Admin' },
                   { value: 'teamleader', label: 'Team Leader' },
-                  { value: 'worker', label: 'Worker' },
+                  { value: 'operator', label: 'Operator' },
                   { value: 'workkerf1', label: 'Faz-I Operatoru' },
                   { value: 'workkerf2', label: 'Faz-II Operatoru' },
                 ]}
