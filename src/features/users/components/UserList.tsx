@@ -48,9 +48,19 @@ export default function UserList({
       <Table.Td style={{ width: '200px' }}>{element.full_name}</Table.Td>
       <Table.Td>{element.username}</Table.Td> 
       <Table.Td>{element.email}</Table.Td>
-      <Table.Td style={{ width: '100px', textAlign: 'center' }}>
-        <Badge color={element.role === 'admin' ? 'blue' : 'gray'}>
-          {element.role === 'admin' ? 'Admin' : 'Worker'}
+      <Table.Td style={{ width: '140px', textAlign: 'center' }}>
+        <Badge color={
+          element.role === 'admin' ? 'blue' : 
+          element.role === 'teamleader' ? 'green' :
+          element.role === 'workkerf1' ? 'orange' :
+          element.role === 'workkerf2' ? 'purple' : 
+          'gray'
+        }>
+          {element.role === 'admin' ? 'Admin' : 
+           element.role === 'teamleader' ? 'Team Leader' :
+           element.role === 'workkerf1' ? 'Faz-I Operatoru' :
+           element.role === 'workkerf2' ? 'Faz-II Operatoru' :
+           'Bilinmeyen'}
         </Badge>
       </Table.Td>
       <Table.Td style={{ width: '120px', textAlign: 'center' }}>
@@ -117,7 +127,7 @@ export default function UserList({
               <Table.Th style={{ width: '200px' }}>Ad Soyad</Table.Th>
               <Table.Th style={{ width: '130px' }}>Kullanıcı Adı</Table.Th>
               <Table.Th>E-posta</Table.Th>
-              <Table.Th style={{ width: '100px' }}>Rol</Table.Th>
+              <Table.Th style={{ width: '150px' }}>Rol</Table.Th>
               <Table.Th style={{ minWidth: 100, width: '120px' }}>Durum</Table.Th>
               <Table.Th style={{ width: 50 }}></Table.Th>
             </Table.Tr>

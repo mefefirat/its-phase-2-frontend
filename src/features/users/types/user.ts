@@ -6,7 +6,7 @@ export interface User {
   full_name?: string;
   first_name: string;
   last_name: string;
-  role: 'admin' | 'worker';
+  role: 'admin' | 'teamleader' | 'workkerf1' | 'workkerf2';
   is_active: boolean;
   default_company: string;
   is_deleted: boolean;

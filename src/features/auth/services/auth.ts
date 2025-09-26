@@ -38,16 +38,31 @@ export async function login(username: string, password: string): Promise<LoginRe
     
     globalStore.setIsAdmin(isAdmin);
     
-    // Set user role
-    if ((data.user as any).role) {
-      globalStore.setUserRole((data.user as any).role);
-    }
+    // Create user object for global store
+    const userForStore = {
+      id: data.user.id || '',
+      username: data.user.username,
+      firstName: (data.user as any).first_name,
+      lastName: (data.user as any).last_name,
+      name: data.user.full_name || data.user.username,
+      email: data.user.email,
+      emailVerified: false,
+      isGlobalAdmin: isAdmin,
+      companyAccesses: [],
+      hasCompanyAccess: true,
+      hasValidDefaultCompany: true,
+      role: (data.user as any).role
+    };
+    
+    // Set user object to global store
+    globalStore.setUser(userForStore);
     
     // Debug: Log the user data to see what we're getting
     if (import.meta.env.DEV) {
       console.log('🔍 Login response user data:', data.user);
       console.log('🔍 Detected admin status:', isAdmin);
       console.log('🔍 User role:', (data.user as any).role);
+      console.log('🔍 User object set to store:', userForStore);
     }
   }
   

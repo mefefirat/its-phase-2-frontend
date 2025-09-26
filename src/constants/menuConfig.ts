@@ -51,8 +51,8 @@ import {
     title: string;
     icon: React.ComponentType<any>;
     items: SubMenuItem[];
-    // Role-based visibility (admin only sections)
-    adminOnly?: boolean;
+    // Role-based visibility - specify which roles can access this group
+    allowedRoles?: ('admin' | 'teamleader' | 'workkerf1' | 'workkerf2')[];
   }
   
   export interface MenuItem {
@@ -67,16 +67,17 @@ import {
   export const menuConfig: MenuItem[] = [
     {
       id: 'its-phase-2',
-      label: 'ITS - Faz II',
+      label: 'ITS',
       icon: IconPill, // İlaç Takip Sistemi için uygun ikon
-      title: 'İlaç Takip Sistemi - Faz-II',
+      title: 'İlaç Takip Sistemi / Üretim',
       titleIcon: IconPill,
       groups: [
         {
           
             id: 'its-phase-2-jobs',
-            title: 'İşler',
+            title: 'Faz-II İşlemler',
             icon: IconClipboardList,
+            allowedRoles: ['admin', 'teamleader', 'workkerf2'],
             items: [
               {
                 id: 'its-phase-2-jobs-new',
@@ -105,11 +106,35 @@ import {
               }
             ]
           },
+
+          {
+          
+            id: 'its-phase-1-jobs',
+            title: 'Faz-I İşlemler',
+            icon: IconClipboardList,
+            allowedRoles: ['admin', 'teamleader', 'workkerf1'],
+            items: [
+              {
+                id: 'its-phase-1-jobs-new',
+                label: 'Yeni İş Başlat',
+                path: '/qrcodes/add',
+                icon: IconCirclePlus
+              }
+              ,
+              {
+                id: 'its-phase-1-jobs-draft',
+                label: 'Tamamlanmış İşler',
+                path: '/qrcodes/list',
+                icon: IconRotate
+              },
+             
+            ]
+          }, 
         {
           id: 'its-phase-2-definitions',
           title: 'Tanımlamalar',
           icon: IconPackage,
-          adminOnly: true,
+          allowedRoles: ['admin'],
           items: [
             {
               id: 'its-phase-2-companies',
@@ -135,6 +160,7 @@ import {
           id: 'its-phase-2-settings',
           title: 'Ayarlar',
           icon: IconPackage,
+          allowedRoles: ['admin', 'teamleader'],
           items: [
             {
               id: 'its-phase-2-printer',

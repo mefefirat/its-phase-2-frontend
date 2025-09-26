@@ -79,22 +79,35 @@ export const createZebraPrinterStore = (storeName: string) => {
             await checkBrowserPrintAvailability();
             
             return new Promise<void>((resolve, reject) => {
-              window.BrowserPrint.getDefaultDevice(
-                "printer",
-                (defaultDevice: BrowserPrintDevice) => {
-                  const newDevices = [defaultDevice];
+              // Timeout için timer
+              const loadTimeout = setTimeout(() => {
+                setLoading(false);
+                setError('Printer yükleme zaman aşımı - BrowserPrint yanıt vermiyor');
+                reject(new Error('Load timeout'));
+              }, 10000); // 10 saniye timeout
+              
+              window.BrowserPrint.getLocalDevices(
+                (deviceList: BrowserPrintDevice[]) => {
+                  clearTimeout(loadTimeout);
                   
-                  window.BrowserPrint.getLocalDevices(
-                    (deviceList: BrowserPrintDevice[]) => {
-                      const allDevices = [...newDevices];
-                      
-                      deviceList.forEach((device) => {
-                        console.log('Device found:', device);
-                        // Sadece geçerli uid'li ve farklı cihazları ekle
-                        if (device.uid && device.uid.trim() !== '' && !allDevices.find(d => d.uid === device.uid)) {
-                          allDevices.push(device);
-                        }
-                      });
+                  const allDevices: BrowserPrintDevice[] = [];
+                  
+                  deviceList.forEach((device) => {
+                    console.log('Device found:', device);
+                    // Sadece geçerli uid'li ve farklı cihazları ekle
+                    if (device.uid && device.uid.trim() !== '' && !allDevices.find(d => d.uid === device.uid)) {
+                      allDevices.push(device);
+                    }
+                  });
+                  
+                  // Default device'ı da almaya çalış ama hata verirse devam et
+                  window.BrowserPrint.getDefaultDevice(
+                    "printer",
+                    (defaultDevice: BrowserPrintDevice) => {
+                      // Default device'ı listeye ekle (eğer yoksa)
+                      if (defaultDevice.uid && !allDevices.find(d => d.uid === defaultDevice.uid)) {
+                        allDevices.unshift(defaultDevice); // Başa ekle
+                      }
                       
                       setDevices(allDevices);
                       
@@ -109,21 +122,32 @@ export const createZebraPrinterStore = (storeName: string) => {
                       setError(null);
                       resolve();
                     },
-                    (error: string) => {
-                      const errorMsg = `Yerel cihazlar alınamadı: ${error}`;
-                      setError(errorMsg);
+                    (defaultError: string) => {
+                      // Default device alınamadı ama devam et
+                      console.warn('Default device alınamadı:', defaultError);
+                      
+                      setDevices(allDevices);
+                      
+                      if (!selectedDevice || !allDevices.find(d => d.uid === selectedDevice.uid)) {
+                        if (allDevices.length > 0) {
+                          setSelectedDevice(allDevices[0]);
+                        }
+                      }
+                      
                       setLoading(false);
-                      reject(new Error(errorMsg));
-                    },
-                    "printer"
+                      setError(null);
+                      resolve();
+                    }
                   );
                 },
                 (error: string) => {
-                  const errorMsg = `Varsayılan cihaz alınamadı: ${error}`;
+                  clearTimeout(loadTimeout);
+                  const errorMsg = `Cihazlar alınamadı: ${error}`;
                   setError(errorMsg);
                   setLoading(false);
                   reject(new Error(errorMsg));
-                }
+                },
+                "printer"
               );
             });
           } catch (err) {

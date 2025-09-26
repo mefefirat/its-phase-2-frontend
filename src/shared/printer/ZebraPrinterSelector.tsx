@@ -122,10 +122,21 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
           return;
         }
 
+        // Timeout ekle
+        const timeout = setTimeout(() => {
+          reject(new Error('Yazdırma timeout - Printer yanıt vermiyor'));
+        }, 10000); // 10 saniye timeout
+
         selectedDevice.send(
           zplData,
-          () => resolve(),
-          (error: string) => reject(new Error(error))
+          () => {
+            clearTimeout(timeout);
+            resolve();
+          },
+          (error: string) => {
+            clearTimeout(timeout);
+            reject(new Error(error));
+          }
         );
       });
     };

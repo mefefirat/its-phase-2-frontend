@@ -194,7 +194,10 @@ export default function UserForm({ initialData, editMode = false, userId }: User
                 placeholder="Rol seçiniz"
                 data={[
                   { value: 'admin', label: 'Admin' },
-                  { value: 'worker', label: 'Worker' }
+                  { value: 'teamleader', label: 'Team Leader' },
+                  { value: 'worker', label: 'Worker' },
+                  { value: 'workkerf1', label: 'Faz-I Operatoru' },
+                  { value: 'workkerf2', label: 'Faz-II Operatoru' },
                 ]}
                 {...form.getInputProps('role')}
                 withAsterisk

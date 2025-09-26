@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Title, Group, ThemeIcon, Button } from '@mantine/core';
 import type { MenuItem } from '@/constants/menuConfig';
 import { MenuGroup } from './MenuGroup';
-import { useIsUserAdmin } from '@/store/globalStore';
+import { useCanAccessMenuGroup } from '@/store/globalStore';
 
 interface SubMenuProps {
   menuItem: MenuItem;
@@ -16,11 +16,11 @@ export const SubMenu: React.FC<SubMenuProps> = ({
   onNavigate 
 }) => {
   const TitleIcon = menuItem.titleIcon;
-  const isUserAdmin = useIsUserAdmin();
+  const canAccessMenuGroup = useCanAccessMenuGroup();
   
-  // Admin-only grupları filtrele
+  // Role-based grupları filtrele
   const visibleGroups = menuItem.groups.filter(group => 
-    !group.adminOnly || isUserAdmin
+    canAccessMenuGroup(group.allowedRoles)
   );
   
   return (

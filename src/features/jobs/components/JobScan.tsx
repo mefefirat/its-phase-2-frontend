@@ -8,7 +8,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { IconArrowLeft, IconDeviceFloppy, IconQrcode, IconPlus, IconMinus, IconPrinter, IconSettings, IconX, IconChevronDown, IconChevronUp, IconCheck, IconLockX, IconDotsVertical, IconRefresh } from '@tabler/icons-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Job, UpdateJobRequest } from '../types/job';
-import { printWithLabelPrinter, isPrinterConfigured, ensurePrinterReady } from '@/utils/printerUtils';
+import { printWithLabelPrinter, isPrinterConfigured, ensurePrinterReady, diagnosePrinterIssues } from '@/utils/printerUtils';
 import { normalizeText } from '@/utils/normalizeText';
 import { pharmaValidator } from '@/utils/pharmaValidator';
 
@@ -36,6 +36,8 @@ export default function JobScan() {
   const [overlay, setOverlay] = useState(false);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [isCheckingPrinter, setIsCheckingPrinter] = useState(false);
+  const [printerDiagnosis, setPrinterDiagnosis] = useState<any>(null);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const { closeSidebar } = useSidebarStore();
@@ -94,7 +96,7 @@ export default function JobScan() {
       }
     };
 
-    // Basit ZPL etiketi oluştur - dinamik değerlerle
+/*
     const zplContent = `^XA
 ^PW479
 ^LL319
@@ -126,17 +128,74 @@ export default function JobScan() {
 ^FO0,290^FB479,1,0,C,0^FD${barcode}^FS
 
 ^XZ`;
+*/
 
+const zplContent = `
+^XA
+
+^FO15,30
+^BXN,4,200
+^FD(01)00386912345676(21)98010002428828(10)LT011312321(17)291031^FS
+
+^FO120,30^A0N,18,18^FD(01) 00386912345676^FS
+^FO120,55^A0N,18,18^FD(21) 98010002428828^FS
+^FO120,80^A0N,18,18^FD(10) LT011312321^FS
+^FO120,105^A0N,18,18^FD(17) 291031^FS
+
+^XZ
+`;
+
+    console.log("Yazdırma işlemi başlatılıyor...");
+    
     try {
       const result = await printWithLabelPrinter(zplContent);
+      console.log("Print result:", result);
       
       if (result.success) {
+        console.log("Yazdırma başarılı");
         setErrorMessage(null); // Clear any previous errors on success
       } else {
-        setErrorMessage(result.message);
+        console.error("Yazdırma hatası:", result);
+        let errorMsg = `Yazdırma hatası: ${result.message}`;
+        
+        if (result.error) {
+          errorMsg += ` - ${result.error}`;
+          
+          // Özel hata mesajları ve çözüm önerileri
+          if (result.error.includes('connection closed') || result.error.includes('writing to port')) {
+            errorMsg += '\n\n💡 Çözüm önerileri:\n';
+            errorMsg += '• Printer\'ı kapatıp açın\n';
+            errorMsg += '• USB kablosunu çıkarıp takın\n';
+            errorMsg += '• BrowserPrint uygulamasını yeniden başlatın\n';
+            errorMsg += '• "Printer Tanısı" butonuna tıklayın';
+          } else if (result.error.includes('timeout')) {
+            errorMsg += '\n\n⏱️ Printer yanıt vermiyor:\n';
+            errorMsg += '• Printer\'ın açık olduğundan emin olun\n';
+            errorMsg += '• Printer\'ın hazır durumda olduğunu kontrol edin\n';
+            errorMsg += '• Kağıt sıkışması olup olmadığına bakın';
+          }
+        }
+        
+        setErrorMessage(errorMsg);
       }
     } catch (error) {
+      console.error("Yazdırma exception:", error);
       setErrorMessage('Yazdırma işlemi sırasında bir hata oluştu');
+    }
+  };
+
+  // Printer tanı fonksiyonu
+  const handlePrinterDiagnosis = async () => {
+    setIsCheckingPrinter(true);
+    try {
+      const diagnosis = await diagnosePrinterIssues('label');
+      setPrinterDiagnosis(diagnosis);
+      setShowDiagnostics(true);
+      console.log("Printer diagnosis:", diagnosis);
+    } catch (error) {
+      setErrorMessage('Printer tanısı sırasında bir hata oluştu');
+    } finally {
+      setIsCheckingPrinter(false);
     }
   };
 
@@ -673,6 +732,15 @@ export default function JobScan() {
                     >
                       Ayarlar
                     </Button>
+                    <Button
+                      size="xs"
+                      variant="light"
+                      color="orange"
+                      onClick={handlePrinterDiagnosis}
+                      loading={isCheckingPrinter}
+                    >
+                      Printer Tanısı
+                    </Button>
                     <Text size="xs" c="red">Ayarlar sayfasına gitmek için tıklayınız</Text>
                   </Group>
                 )}
@@ -681,6 +749,90 @@ export default function JobScan() {
           )}
 
          
+        </Paper>
+      )}
+
+      {/* Printer Diagnostics */}
+      {showDiagnostics && printerDiagnosis && (
+        <Paper withBorder p="lg" mb="lg" bg="orange.0">
+          <Stack gap="sm">
+            <Group justify="space-between">
+              <Text fw={600} c="orange">🔧 Printer Tanı Sonuçları</Text>
+              <ActionIcon variant="subtle" onClick={() => setShowDiagnostics(false)}>
+                <IconX size={16} />
+              </ActionIcon>
+            </Group>
+            
+            <Grid>
+              <Grid.Col span={6}>
+                <Text size="sm" fw={500}>BrowserPrint Durumu:</Text>
+                <Text size="sm" c={printerDiagnosis.browserPrintAvailable ? "green" : "red"}>
+                  {printerDiagnosis.browserPrintAvailable ? "✅ Mevcut" : "❌ Bulunamadı"}
+                </Text>
+              </Grid.Col>
+              
+              <Grid.Col span={6}>
+                <Text size="sm" fw={500}>Servis Durumu:</Text>
+                <Text size="sm" c={printerDiagnosis.serviceReachable ? "green" : "red"}>
+                  {printerDiagnosis.serviceReachable ? "✅ Erişilebilir" : "❌ Ulaşılamıyor"}
+                </Text>
+              </Grid.Col>
+              
+              <Grid.Col span={6}>
+                <Text size="sm" fw={500}>Printer Ayarı:</Text>
+                <Text size="sm" c={printerDiagnosis.printerConfigured ? "green" : "red"}>
+                  {printerDiagnosis.printerConfigured ? "✅ Ayarlandı" : "❌ Ayarlanmadı"}
+                  {printerDiagnosis.configuredPrinterId && ` (${printerDiagnosis.configuredPrinterId})`}
+                </Text>
+              </Grid.Col>
+              
+              <Grid.Col span={6}>
+                <Text size="sm" fw={500}>Cihaz Durumu:</Text>
+                <Text size="sm" c={printerDiagnosis.deviceFound ? "green" : "red"}>
+                  {printerDiagnosis.deviceFound ? "✅ Bulundu" : "❌ Bulunamadı"}
+                </Text>
+              </Grid.Col>
+            </Grid>
+
+            {printerDiagnosis.availableDevices?.length > 0 && (
+              <div>
+                <Text size="sm" fw={500} mb="xs">Mevcut Cihazlar ({printerDiagnosis.availableDevices.length}):</Text>
+                <Stack gap="xs">
+                  {printerDiagnosis.availableDevices.map((device: any, index: number) => (
+                    <Group key={index} gap="sm" bg="white" p="xs" style={{ borderRadius: 4 }}>
+                      <Text size="xs" fw={500}>{device.name || 'İsimsiz'}</Text>
+                      <Text size="xs" c="dimmed">ID: {device.uid}</Text>
+                      {device.uid === printerDiagnosis.configuredPrinterId && (
+                        <Text size="xs" c="green" fw={500}>✅ Seçili</Text>
+                      )}
+                    </Group>
+                  ))}
+                </Stack>
+              </div>
+            )}
+
+            {printerDiagnosis.issues?.length > 0 && (
+              <div>
+                <Text size="sm" fw={500} c="red" mb="xs">❌ Sorunlar:</Text>
+                <Stack gap="xs">
+                  {printerDiagnosis.issues.map((issue: string, index: number) => (
+                    <Text key={index} size="xs" c="red">• {issue}</Text>
+                  ))}
+                </Stack>
+              </div>
+            )}
+
+            {printerDiagnosis.recommendations?.length > 0 && (
+              <div>
+                <Text size="sm" fw={500} c="blue" mb="xs">💡 Öneriler:</Text>
+                <Stack gap="xs">
+                  {printerDiagnosis.recommendations.map((rec: string, index: number) => (
+                    <Text key={index} size="xs" c="blue">• {rec}</Text>
+                  ))}
+                </Stack>
+              </div>
+            )}
+          </Stack>
         </Paper>
       )}
 
@@ -794,7 +946,7 @@ export default function JobScan() {
                     size="md"
                     onClick={async () => {
                       if (!jobId) return;
-                      await fetchJobPackageHierarchyByLatestScan(jobId);
+                      await  (jobId);
                     }} 
                     style={{ padding: '4px', minWidth: 'auto', width: '32px', height: '32px' }}
                     title="Yenile"

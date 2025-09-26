@@ -1,7 +1,7 @@
 // src/store/globalStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { parseKeycloakToken, hasCompanyRole, hasRoleInAnyCompany, type CompanyAccess } from '@/utils/keycloakTokenParser';
+import { hasCompanyRole, hasRoleInAnyCompany, type CompanyAccess } from '@/utils/keycloakTokenParser';
 import { tokenStorage } from '@/utils/tokenStorage';
 
 // Basit company interface
@@ -17,8 +17,8 @@ interface CurrentCompany {
   gcp?: string;
 }
 
-// Keycloak kullanıcı bilgileri (genişletilmiş)
-interface KeycloakUser {
+// Kullanıcı bilgileri (JWT sisteminden)
+interface AppUser {
   id: string;
   name?: string;
   email?: string;
@@ -30,8 +30,8 @@ interface KeycloakUser {
   // Company access bilgileri
   companyAccesses: CompanyAccess[];
   isGlobalAdmin: boolean;
-  // Database role (admin/worker)
-  role?: 'admin' | 'worker';
+  // Database role
+  role?: 'admin' | 'teamleader' | 'workkerf1' | 'workkerf2';
   // Default company ID
   defaultCompanyId?: string;
   // Validation flags
@@ -47,8 +47,8 @@ interface GlobalState {
   // Admin durumu (global admin)
   isAdmin: boolean;
   
-  // Keycloak kullanıcı bilgileri (genişletilmiş)
-  user: KeycloakUser | null;
+  // JWT kullanıcı bilgileri
+  user: AppUser | null;
 
   // Basit görüntü adı (ör. full_name)
   fullName: string | null;
@@ -82,7 +82,7 @@ interface GlobalState {
   setCurrentCompany: (company: CurrentCompany) => void;
   clearCurrentCompany: () => void;
   setIsAdmin: (isAdmin: boolean) => void;
-  setUser: (user: KeycloakUser | null) => void;
+  setUser: (user: AppUser | null) => void;
   setFullName: (fullName: string | null) => void;
   setAuthenticated: (authenticated: boolean) => void;
   setSettings: (settings: Partial<GlobalState['settings']>) => void;
@@ -90,15 +90,10 @@ interface GlobalState {
   setLoading: (loading: boolean) => void;
   setUserLoading: (loading: boolean) => void;
   setSessionInfo: (sessionInfo: Partial<GlobalState['sessionInfo']>) => void;
-  setUserRole: (role: 'admin' | 'worker') => void;
+  setUserRole: (role: 'admin' | 'teamleader' | 'workkerf1' | 'workkerf2') => void;
   
-  // Keycloak specific actions
-  updateUserFromKeycloak: (keycloakData: {
-    profile?: any;
-    tokenParsed?: any;
-    realmAccess?: any;
-    subject?: string;
-  }) => void;
+  // JWT specific actions
+  updateUserFromJWT: (userData: Partial<AppUser>) => void;
   
   // Company access helper methods
   hasCompanyRole: (companyId: string, role: string) => boolean;
@@ -212,37 +207,11 @@ export const useGlobalStore = create<GlobalState>()(
           user: state.user ? { ...state.user, role } : null
         })),
       
-      // Keycloak'tan kullanıcı bilgilerini güncelleme
-      updateUserFromKeycloak: ({ profile, tokenParsed, realmAccess, subject }) => {
-        // Token'ı parse et (profile bilgisiyle birlikte)
-        const parsedData = parseKeycloakToken(tokenParsed || {}, realmAccess, profile);
-        
-        // Profile bilgilerini ekle
-        const user: KeycloakUser = {
-          ...parsedData,
-          name: profile?.firstName && profile?.lastName 
-            ? `${profile.firstName} ${profile.lastName}` 
-            : parsedData.name,
-          email: profile?.email || parsedData.email,
-          emailVerified: profile?.emailVerified || parsedData.emailVerified,
-        };
-        
-        set({ 
-          user, 
-          isAdmin: parsedData.isGlobalAdmin,
-          isAuthenticated: true
-        });
-        
-        // Session bilgilerini güncelle
-        if (tokenParsed?.exp) {
-          set((state) => ({
-            sessionInfo: {
-              ...state.sessionInfo,
-              tokenExpiry: new Date(tokenParsed.exp * 1000),
-              lastActivity: new Date()
-            }
-          }));
-        }
+      // JWT'den kullanıcı bilgilerini güncelleme
+      updateUserFromJWT: (userData) => {
+        set((state) => ({
+          user: state.user ? { ...state.user, ...userData } : null
+        }));
       },
       
       // Company role kontrolü
@@ -403,14 +372,36 @@ export const useIsAdmin = () => {
 // Kullanıcının database role'ünü kontrol et
 export const useUserRole = () => {
   const user = useGlobalStore((state) => state.user);
-  return user?.role || 'worker'; // Default olarak worker
+  return user?.role || 'workkerf2'; // Default fallback
 };
 
 // Kullanıcı admin mi kontrol et (hem Keycloak hem de database role)
 export const useIsUserAdmin = () => {
   const isAdmin = useGlobalStore((state) => state.isAdmin);
   const userRole = useUserRole();
-  return isAdmin || userRole === 'admin';
+  return isAdmin || userRole === 'admin' || userRole === 'teamleader';
+};
+
+// Kullanıcının menü grubuna erişimi var mı kontrol et
+export const useCanAccessMenuGroup = () => {
+  const isAdmin = useGlobalStore((state) => state.isAdmin);
+  const userRole = useUserRole();
+  const user = useGlobalStore((state) => state.user);
+  
+  return (allowedRoles?: ('admin' | 'teamleader' | 'workkerf1' | 'workkerf2')[]) => {
+    // Eğer allowedRoles tanımlı değilse, herkese açık
+    if (!allowedRoles || allowedRoles.length === 0) {
+      return true;
+    }
+    
+    // Global admin her zaman erişebilir
+    if (isAdmin) {
+      return true;
+    }
+    
+    // Kullanıcının rolü izin verilen roller arasında mı kontrol et
+    return allowedRoles.includes(userRole);
+  };
 };
 
 // Kullanıcı role'ünü güncellemek için hook

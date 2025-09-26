@@ -67,6 +67,24 @@ export const routes: AppRoute[] = [
     element: lazy(() => import("@/features/jobs/components/JobScan")) 
   },
   
+  // Qrcodes routes
+  { 
+    path: "/qrcodes", 
+    element: lazy(() => import("@/features/qrcodes")) 
+  },
+  { 
+    path: "/qrcodes/list", 
+    element: lazy(() => import("@/features/qrcodes")) 
+  },
+  { 
+    path: "/qrcodes/add", 
+    element: lazy(() => import("@/features/qrcodes/components/QrcodesForm")) 
+  },
+  { 
+    path: "/qrcodes/edit/:id", 
+    element: lazy(() => import("@/features/qrcodes/components/QrcodesForm")) 
+  },
+  
   // Settings routes
   { 
     path: "/settings/printer", 
