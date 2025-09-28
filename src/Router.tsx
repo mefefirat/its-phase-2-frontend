@@ -42,7 +42,7 @@ export function Router() {
   );
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/its-phase">
       <Suspense fallback={fallback}>
         <LayoutProvider>
           <Routes>
