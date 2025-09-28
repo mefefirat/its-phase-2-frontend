@@ -33,50 +33,20 @@ const initialState = {
   error: null,
 };
 
-const checkBrowserPrintAvailability = async (): Promise<void> => {
-  // Önce BrowserPrint nesnesinin var olup olmadığını kontrol et
-  if (typeof window !== 'undefined' && typeof window.BrowserPrint !== 'undefined') {
-    return Promise.resolve();
-  }
-
-  // BrowserPrint servisinin erişilebilir olup olmadığını kontrol et
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 saniye timeout
-    
-    const response = await fetch('http://127.0.0.1:9100/available', { 
-      method: 'GET',
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      throw new Error('BrowserPrint servisi yanıt vermiyor');
-    }
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('BrowserPrint servisine bağlantı zaman aşımına uğradı. Servisi yeniden başlatın.');
-    }
-    throw new Error('Zebra BrowserPrint servisi bulunamadı. Lütfen BrowserPrint uygulamasının yüklü ve çalışır durumda olduğundan emin olun.');
-  }
-
-  // BrowserPrint script'inin yüklenmesini bekle (daha kısa aralıklarla)
+const checkBrowserPrintAvailability = (): Promise<void> => {
   return new Promise((resolve, reject) => {
-    let attempts = 0;
-    const maxAttempts = 50; // Maksimum 50 deneme (5 saniye)
-    
     const checkInterval = setInterval(() => {
-      attempts++;
-      
       if (typeof window.BrowserPrint !== 'undefined') {
         clearInterval(checkInterval);
         resolve();
-      } else if (attempts >= maxAttempts) {
-        clearInterval(checkInterval);
-        reject(new Error('BrowserPrint script yüklenemedi. Sayfayı yenilemeyi deneyin.'));
       }
     }, 100);
+
+    // 10 saniye sonra timeout
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      reject(new Error('BrowserPrint yüklenemedi. Lütfen Zebra BrowserPrint uygulamasının yüklü olduğundan emin olun.'));
+    }, 10000);
   });
 };
 
@@ -106,17 +76,15 @@ export const createZebraPrinterStore = (storeName: string) => {
             setLoading(true);
             setError(null);
             
-            // BrowserPrint availability kontrolünü yap
             await checkBrowserPrintAvailability();
             
             return new Promise<void>((resolve, reject) => {
-              // Timeout için timer - production ortamında daha az süre
-              const timeoutDuration = process.env.NODE_ENV === 'production' ? 8000 : 10000;
+              // Timeout için timer
               const loadTimeout = setTimeout(() => {
                 setLoading(false);
-                setError('Printer cihaz listesi yüklenirken zaman aşımına uğrandı. BrowserPrint servisinin çalıştığından emin olun.');
-                reject(new Error('Device loading timeout'));
-              }, timeoutDuration);
+                setError('Printer yükleme zaman aşımı - BrowserPrint yanıt vermiyor');
+                reject(new Error('Load timeout'));
+              }, 10000); // 10 saniye timeout
               
               window.BrowserPrint.getLocalDevices(
                 (deviceList: BrowserPrintDevice[]) => {
@@ -143,11 +111,9 @@ export const createZebraPrinterStore = (storeName: string) => {
                       
                       setDevices(allDevices);
                       
-                      // Eğer seçili cihaz yoksa veya artık mevcut değilse, ilk cihazı seç
-                      if (!selectedDevice || !allDevices.find(d => d.uid === selectedDevice.uid)) {
-                        if (allDevices.length > 0) {
-                          setSelectedDevice(allDevices[0]);
-                        }
+                      // Eğer seçili cihaz artık mevcut değilse, seçimi temizle
+                      if (selectedDevice && !allDevices.find(d => d.uid === selectedDevice.uid)) {
+                        setSelectedDevice(null);
                       }
                       
                       setLoading(false);
@@ -160,10 +126,8 @@ export const createZebraPrinterStore = (storeName: string) => {
                       
                       setDevices(allDevices);
                       
-                      if (!selectedDevice || !allDevices.find(d => d.uid === selectedDevice.uid)) {
-                        if (allDevices.length > 0) {
-                          setSelectedDevice(allDevices[0]);
-                        }
+                      if (selectedDevice && !allDevices.find(d => d.uid === selectedDevice.uid)) {
+                        setSelectedDevice(null);
                       }
                       
                       setLoading(false);
@@ -174,19 +138,7 @@ export const createZebraPrinterStore = (storeName: string) => {
                 },
                 (error: string) => {
                   clearTimeout(loadTimeout);
-                  let errorMsg = 'Printer cihaz listesi alınamadı';
-                  
-                  // Hata tipine göre daha açıklayıcı mesajlar
-                  if (error.toLowerCase().includes('timeout')) {
-                    errorMsg = 'BrowserPrint servisi zaman aşımına uğradı. Servisi yeniden başlatın.';
-                  } else if (error.toLowerCase().includes('connection')) {
-                    errorMsg = 'BrowserPrint servisine bağlanılamadı. Servisin çalıştığından emin olun.';
-                  } else if (error.toLowerCase().includes('access')) {
-                    errorMsg = 'BrowserPrint servisine erişim izni reddedildi. Tarayıcı ayarlarınızı kontrol edin.';
-                  } else {
-                    errorMsg = `Printer cihaz listesi hatası: ${error}`;
-                  }
-                  
+                  const errorMsg = `Cihazlar alınamadı: ${error}`;
                   setError(errorMsg);
                   setLoading(false);
                   reject(new Error(errorMsg));
@@ -195,19 +147,7 @@ export const createZebraPrinterStore = (storeName: string) => {
               );
             });
           } catch (err) {
-            let errorMessage = 'Bilinmeyen printer hatası oluştu';
-            
-            if (err instanceof Error) {
-              if (err.message.includes('BrowserPrint servisi')) {
-                errorMessage = err.message;
-              } else if (err.message.includes('fetch')) {
-                errorMessage = 'BrowserPrint servisine erişilemiyor. Zebra BrowserPrint uygulamasının yüklü ve çalışır durumda olduğunu kontrol edin.';
-              } else {
-                errorMessage = `Printer yükleme hatası: ${err.message}`;
-              }
-            }
-            
-            console.error('Printer loading error:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Bilinmeyen hata';
             setError(errorMessage);
             setLoading(false);
             throw err;

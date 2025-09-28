@@ -156,6 +156,7 @@ import {
             }
           ]
         },
+        /*
         {
           id: 'its-phase-2-settings',
           title: 'Ayarlar',
@@ -169,7 +170,7 @@ import {
               icon: IconPackageImport
             },
            ]
-        }
+        }*/
         
       ]
     }

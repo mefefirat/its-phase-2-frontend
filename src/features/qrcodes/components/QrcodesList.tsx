@@ -56,6 +56,7 @@ export default function QrcodesList() {
 
   const rows = items.map((item) => (
     <Table.Tr key={item.id}>
+       <Table.Td>{item.order_number}</Table.Td>
       <Table.Td>{item.gtin}</Table.Td>
       <Table.Td>{item.lot}</Table.Td>
       <Table.Td>{item.expiry_date}</Table.Td>
@@ -70,6 +71,9 @@ export default function QrcodesList() {
   // Skeleton rows for loading state
   const skeletonRows = Array.from({ length: 5 }).map((_, index) => (
     <Table.Tr key={`skeleton-${index}`}>
+      <Table.Td>
+        <div style={{ height: 20, backgroundColor: '#f0f0f0', borderRadius: 4 }} />
+      </Table.Td>
       <Table.Td>
         <div style={{ height: 20, backgroundColor: '#f0f0f0', borderRadius: 4 }} />
       </Table.Td>
@@ -112,6 +116,7 @@ export default function QrcodesList() {
         <Table verticalSpacing="sm" striped highlightOnHover withColumnBorders>
           <Table.Thead style={{ backgroundColor: '#228be61f' }}>
             <Table.Tr>
+            <Table.Th fw={500}>İş Emri No</Table.Th>
               <Table.Th style={{ width: '120px' }} fw={500}>GTIN</Table.Th>
               <Table.Th fw={500}>LOT</Table.Th>
               <Table.Th style={{ width: '120px' }} fw={500}>SKT</Table.Th>
@@ -127,7 +132,7 @@ export default function QrcodesList() {
               skeletonRows
             ) : items.length === 0 ? (
               <Table.Tr>
-                <Table.Td colSpan={8}>
+                <Table.Td colSpan={9}>
                   <Text ta="center" c="dimmed" py="xl">
                     Henüz QR Kod öğesi bulunmamaktadır.
                   </Text>

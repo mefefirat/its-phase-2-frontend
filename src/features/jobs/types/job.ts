@@ -2,6 +2,7 @@ export interface Job {
     id?: string;
     company_code: string;
     material_id: string;
+    job_number?: number;
     material_name?: string;
     gtin?: string | null;
     sku?: string | null;

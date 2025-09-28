@@ -10,6 +10,7 @@ interface PaginationParams {
 interface QrcodesParams extends PaginationParams {
     gtin?: string;
     lot?: string;
+    order_number?: number;
     search_term?: string;
 }
 
@@ -20,7 +21,8 @@ export const fetchQrcodesItems = async (params: QrcodesParams = {}) => {
     const response = await axiosInstance.get('/v1/qrcodes', {
         params: {
             gtin: params.gtin,
-            lot: params.lot
+            lot: params.lot,
+            order_number: params.order_number
         }
     });
     return response.data as PaginatedResponse<Qrcodes>;
@@ -33,12 +35,15 @@ export const fetchQrcodesItemsList = async (params: QrcodesParams = {}) => {
         // Eğer search_term dolu ise, sadece search_term gönder
         requestParams.search_term = params.search_term;
     } else {
-        // Eğer search_term boş ise, gtin, lot gönder
+        // Eğer search_term boş ise, gtin, lot, order_number gönder
         if (params.gtin) {
             requestParams.gtin = params.gtin;
         }
         if (params.lot) {
             requestParams.lot = params.lot;
+        }
+        if (params.order_number) {
+            requestParams.order_number = params.order_number;
         }
     }
     
@@ -86,7 +91,14 @@ export const fetchQrcodesItemsDropdown = async () => {
     return response.data;
 };
 
-export const fetchCurrentSerialNumber = async (): Promise<{ current_serial_number: number }> => {
+export const fetchCurrentOrderNumber = async () => {
+    const response = await axiosInstance.get('/v1/qrcodes/current-order-number');
+    return response.data;
+};
+
+export const fetchCurrentSerialNumber = async () => {
     const response = await axiosInstance.get('/v1/qrcodes/current-serial-number');
     return response.data;
 };
+
+

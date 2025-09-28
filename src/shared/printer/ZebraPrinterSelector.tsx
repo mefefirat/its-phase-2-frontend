@@ -23,7 +23,14 @@ interface BrowserPrintDevice {
   name: string;
   connection: string;
   deviceType: string;
+  version?: number;
+  provider?: string;
+  manufacturer?: string;
   send: (data: string, successCallback?: () => void, errorCallback?: (error: string) => void) => void;
+}
+
+interface AvailablePrintersResponse {
+  printer: BrowserPrintDevice[];
 }
 
 interface ZebraPrinterSelectorProps extends Omit<SelectProps, 'data' | 'value' | 'onChange' | 'onError'> {
@@ -58,7 +65,7 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
     autoLoadOnMount = true,
     zplContent = '^XA^PW799^LL400^FO30,30^BXN,16,200^FD01L001C1^FS^FO300,30^A0N,80,120^FD01L00101^FS^XZ',
     label = "Printer Seçin",
-    placeholder = "Bir printer seçin",
+    placeholder = "Printer seçin",
     disabled = true,
     storeType = 'default',
     ...selectProps
@@ -112,7 +119,64 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
         onPrintSuccess?.(msg);
       } else if (type === 'error') {
         onPrintError?.(msg);
+      } else if (type === 'info') {
+        // Info mesajları için onPrintSuccess kullanabiliriz (mavi renk için)
+        onPrintSuccess?.(msg);
       }
+    };
+
+    // BrowserPrint available endpoint'ini kontrol eder
+    const checkPrinterAvailability = async (deviceUid: string): Promise<boolean> => {
+      const maxRetries = 5; // 5 saniye boyunca dene
+      const retryInterval = 1000; // Her saniye kontrol et
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`🔍 Available check attempt ${attempt}/${maxRetries} for ${deviceUid}`);
+          
+          const response = await fetch('http://127.0.0.1:9100/available', {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            // Timeout ekle
+            signal: AbortSignal.timeout(2000) // 2 saniye timeout per request
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const data: AvailablePrintersResponse = await response.json();
+          console.log('Available printers:', data);
+
+          // Seçilen printer'ın available listesinde olup olmadığını kontrol et
+          const isAvailable = data.printer?.some(p => p.uid === deviceUid);
+          
+          if (isAvailable) {
+            console.log(`✅ Printer ${deviceUid} is available`);
+            return true;
+          }
+          
+          console.log(`⚠️ Printer ${deviceUid} not found in available list, retrying...`);
+          
+          // Son attempt değilse bekle
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, retryInterval));
+          }
+          
+        } catch (error) {
+          console.error(`❌ Available check failed (attempt ${attempt}):`, error);
+          
+          // Son attempt değilse bekle
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, retryInterval));
+          }
+        }
+      }
+
+      console.log(`❌ Printer ${deviceUid} not available after ${maxRetries} attempts`);
+      return false;
     };
 
     const sendZPLLabel = (zplData: string): Promise<void> => {
@@ -122,33 +186,133 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
           return;
         }
 
+        console.log(`Sending ZPL to ${selectedDevice.name}:`, zplData);
+
         // Timeout ekle
         const timeout = setTimeout(() => {
-          reject(new Error('Yazdırma timeout - Printer yanıt vermiyor'));
+          reject(new Error('Yazdırma timeout - Printer 10 saniye içinde yanıt vermedi. Printer açık ve hazır mı?'));
         }, 10000); // 10 saniye timeout
 
         selectedDevice.send(
           zplData,
           () => {
+            // Success callback - BrowserPrint API başarıyla printer'a gönderdi
             clearTimeout(timeout);
+            console.log(`ZPL successfully sent to ${selectedDevice.name}`);
             resolve();
           },
           (error: string) => {
+            // Error callback - BrowserPrint API bir hata ile karşılaştı
             clearTimeout(timeout);
-            reject(new Error(error));
+            console.error(`ZPL send failed to ${selectedDevice.name}:`, error);
+            reject(new Error(error || 'BrowserPrint API hatası'));
           }
         );
       });
     };
 
-    const handleDeviceChange = (deviceId: string | null): void => {
+    // Printer bağlantı durumunu ve kullanılabilirliğini test eder
+    const testPrinterConnection = async (device: BrowserPrintDevice): Promise<boolean> => {
+      try {
+        // Önce device'ın temel bilgilerini kontrol et
+        if (!device.uid || !device.name || !device.connection) {
+          console.warn('Device bilgileri eksik:', device);
+          return false;
+        }
+
+        console.log(`🔍 Testing printer: ${device.name} (${device.uid})`);
+
+        // 1. Adım: Available endpoint'ini kontrol et (5 saniye boyunca dene)
+        console.log('Step 1: Checking printer availability...');
+        const isAvailable = await checkPrinterAvailability(device.uid);
+        
+        if (!isAvailable) {
+          console.warn(`❌ Printer ${device.name} not available in BrowserPrint`);
+          return false;
+        }
+
+        console.log(`✅ Printer ${device.name} is available, testing connection...`);
+
+        // 2. Adım: ZPL test komutu gönder
+        console.log('Step 2: Testing ZPL connection...');
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('ZPL connection timeout - Printer 5 saniye içinde yanıt vermedi'));
+          }, 5000); // 5 saniye timeout
+
+          // BrowserPrint API'sinde success callback çağrılması = başarılı gönderim
+          // Error callback çağrılması = hata var  
+          device.send(
+            '^XA^XZ', // Minimal ZPL command - boş etiket (hiçbir şey yazdırmaz)
+            () => {
+              // Success callback - BrowserPrint API başarıyla printer'a ulaştı
+              clearTimeout(timeout);
+              console.log(`✅ ZPL connection test successful: ${device.name}`);
+              resolve();
+            },
+            (error: string) => {
+              // Error callback - BrowserPrint API bir hata ile karşılaştı
+              clearTimeout(timeout);
+              console.error(`❌ ZPL connection test failed: ${device.name} - ${error}`);
+              reject(new Error(error || 'ZPL bağlantı hatası'));
+            }
+          );
+        });
+        
+        console.log(`🎉 Full printer test successful: ${device.name}`);
+        return true;
+      } catch (error) {
+        console.warn(`⚠️ Printer test failed for ${device.name}:`, error);
+        return false;
+      }
+    };
+
+    const handleDeviceChange = async (deviceId: string | null): Promise<void> => {
       if (deviceId) {
         const device = devices.find(d => d.uid === deviceId);
         if (device) {
+          // Önce device'ı seç
           setSelectedDevice(device);
+          
+          // Device bilgilerini logla (debug için)
+          console.log('Selected device details:', {
+            uid: device.uid,
+            name: device.name,
+            connection: device.connection,
+            deviceType: device.deviceType,
+            version: device.version,
+            provider: device.provider
+          });
+          
+          // Printer seçildiğinde kapsamlı kontrol yap (Available endpoint + ZPL test)
+          showPrintMessage(`🔍 ${device.name} (${device.connection}) kontrol ediliyor... (5 saniye test)`, 'info');
+          
+          const isFullyReady = await testPrinterConnection(device);
+          
+          if (isFullyReady) {
+            showPrintMessage(`✅ ${device.name} printer hazır ve bağlı! Kullanıma hazır.`, 'success');
+          } else {
+            // Daha detaylı hata mesajı ver
+            let errorDetail = '';
+            if (device.connection?.toLowerCase().includes('usb')) {
+              errorDetail = 'USB kablosu bağlı mı ve printer açık mı kontrol edin.';
+            } else if (device.connection?.toLowerCase().includes('network')) {
+              errorDetail = 'Ağ bağlantısı ve printer IP adresi kontrol edin.';
+            } else if (device.connection?.toLowerCase().includes('driver')) {
+              errorDetail = 'Printer sürücüsü doğru kurulu mu ve printer açık mı kontrol edin.';
+            } else {
+              errorDetail = 'Printer açık ve hazır mı kontrol edin.';
+            }
+            
+            showPrintMessage(`❌ ${device.name} 5 saniye içinde bulunamadı veya bağlantı kurulamadı. ${errorDetail}`, 'error');
+          }
+        } else {
+          console.warn('Device not found in list:', deviceId);
+          showPrintMessage('Seçilen printer bulunamadı', 'error');
         }
       } else {
         setSelectedDevice(null);
+        showPrintMessage('Printer seçimi kaldırıldı', 'info');
       }
     };
 
@@ -168,13 +332,20 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
       }
 
       setIsPrinting(true);
+      
+      // Debug için ZPL içeriğini ve printer bilgisini logla
+      console.log('Printing ZPL:', contentToPrint);
+      console.log('To printer:', selectedDevice);
+      
       try {
+        showPrintMessage(`🖨️ ${selectedDevice.name} printer'a gönderiliyor...`, 'info');
         await sendZPLLabel(contentToPrint);
-        const successMsg = 'ZPL etiketi başarıyla gönderildi!';
+        const successMsg = `✅ ZPL etiketi ${selectedDevice.name} printer'a başarıyla gönderildi!`;
         showPrintMessage(successMsg, 'success');
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Bilinmeyen hata';
-        const fullErrorMsg = `Yazdırma hatası: ${errorMessage}`;
+        const fullErrorMsg = `❌ ${selectedDevice.name} yazdırma hatası: ${errorMessage}`;
+        console.error('Print error details:', err, selectedDevice);
         showPrintMessage(fullErrorMsg, 'error');
         throw err;
       } finally {
@@ -182,13 +353,21 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
       }
     };
 
-    const handleDirectPrint = async (): Promise<void> => {
-      try {
-        await print();
-      } catch (err) {
-        // Hata mesajı zaten print fonksiyonunda gösteriliyor
-      }
-    };
+  const handleDirectPrint = async (): Promise<void> => {
+    try {
+      await print();
+    } catch (err) {
+      // Hata mesajı zaten print fonksiyonunda gösteriliyor
+    }
+  };
+
+  const handleTestPrint = async (): Promise<void> => {
+    try {
+      await print('^XA^XZ');
+    } catch (err) {
+      // Hata mesajı zaten print fonksiyonunda gösteriliyor
+    }
+  };
 
     // Cihaz seçeneklerini oluştur
     const deviceOptions = devices
@@ -235,40 +414,16 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
           )}
           <Alert
             icon={<IconAlertCircle size={16} />}
-            title="Printer Bağlantı Hatası"
+            title="Bağlantı Hatası"
             color="red"
             variant="light"
+            
           >
             <Stack gap="sm">
               <Text size="sm">{error}</Text>
-              
-              {/* Hata tipine göre farklı yardım mesajları */}
-              {error.includes('servisi bulunamadı') ? (
-                <Text size="xs" c="dimmed">
-                  • Zebra BrowserPrint uygulamasını indirin ve yükleyin<br/>
-                  • Uygulamanın çalıştığından emin olun<br/>
-                  • Tarayıcınızı yenileyin
-                </Text>
-              ) : error.includes('zaman aşımı') ? (
-                <Text size="xs" c="dimmed">
-                  • BrowserPrint servisini yeniden başlatın<br/>
-                  • Bilgisayarınızın performansını kontrol edin<br/>
-                  • Güvenlik duvarı ayarlarını kontrol edin
-                </Text>
-              ) : error.includes('bağlanılamadı') ? (
-                <Text size="xs" c="dimmed">
-                  • BrowserPrint uygulamasının çalıştığından emin olun<br/>
-                  • Port 9100'ün açık olduğunu kontrol edin<br/>
-                  • Antiviral yazılımınızı kontrol edin
-                </Text>
-              ) : (
-                <Text size="xs" c="dimmed">
-                  • Zebra BrowserPrint uygulamasının yüklü ve çalışır durumda olduğundan emin olun<br/>
-                  • Printer'ın USB ile bağlı olduğunu kontrol edin<br/>
-                  • Sayfa yenilemeyi deneyin
-                </Text>
-              )}
-              
+              <Text size="xs" c="dimmed">
+                Lütfen Zebra BrowserPrint uygulamasının yüklü ve çalışır durumda olduğundan emin olun.
+              </Text>
               {showRefreshButton && (
                 <Button
                   leftSection={<IconRefresh size={16} />}
@@ -276,7 +431,7 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
                   variant="light"
                   onClick={refreshPrinters}
                 >
-                  Yeniden Dene
+                  Tekrar Dene
                 </Button>
               )}
             </Stack>
@@ -319,6 +474,18 @@ const ZebraPrinterSelector = forwardRef<ZebraPrinterSelectorRef, ZebraPrinterSel
                   disabled={isLoading}
                 >
                   Yenile
+                </Button>
+              )}
+              {showRefreshButton && !hideSelect && (
+                <Button
+                  size="xs"
+                  variant="outline"
+                  color="green"
+                  onClick={handleTestPrint}
+                  disabled={!selectedDevice || isLoading || isPrinting || disabled}
+                  loading={isPrinting}
+                >
+                  Test
                 </Button>
               )}
             </Group>

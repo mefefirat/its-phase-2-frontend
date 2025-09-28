@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import React from 'react';
 import { notifications } from '@mantine/notifications';
 import { IconCheck, IconX } from '@tabler/icons-react';
-import { fetchJobs, insertJob, updateJob, deleteJob, fetchJobById, fetchJobsList, fetchJobPackHierarchyRecursive, createJobScan, fetchJobPackages, fetchJobScans, fetchJobPackageHierarchyByLatestScan, fetchLastScannedByJob, forceCloseJobPackage } from '../services/jobs';
+import { fetchJobs, insertJob, updateJob, deleteJob, fetchJobById, fetchJobsList, fetchJobPackHierarchyRecursive, createJobScan, fetchJobPackages, fetchJobScans, fetchJobPackageHierarchyByLatestScan, fetchLastScannedByJob, forceCloseJobPackage, fetchCurrentJobNumber } from '../services/jobs';
 import type { CreateJobScanRequest } from '../services/jobs';
 import type { Job, CreateJobRequest, UpdateJobRequest, JobPackHierarchyNode, JobPackage, JobScan, JobLastScannedItem } from '../types/job';
 import type { PaginatedResponse } from '@/utils/responseHelper';
@@ -24,6 +24,7 @@ interface JobState {
     jobScans: JobScan[];
     jobPackageHierarchyByLatestScan: JobPackHierarchyNode[];
     lastScanned: JobLastScannedItem[];
+    currentJobNumber: number | null;
     page?: number;
     per_page?: number;
     total?: number;
@@ -44,6 +45,7 @@ interface JobState {
     removeJob: (jobId: string) => Promise<void>;
     scanJob: (payload: CreateJobScanRequest) => Promise<any>;
     forceClosePackage: (jobPackageId: string) => Promise<any>;
+    fetchCurrentJobNumber: () => Promise<number>;
 }
 
 export const useJobStore = create<JobState>((set, get) => ({
@@ -55,6 +57,7 @@ export const useJobStore = create<JobState>((set, get) => ({
     jobScans: [],
     jobPackageHierarchyByLatestScan: [],
     lastScanned: [],
+    currentJobNumber: null,
     page: 1,
     per_page: 10,
     total: 0,
@@ -391,6 +394,25 @@ export const useJobStore = create<JobState>((set, get) => ({
             notifications.show({
                 title: 'Hata!',
                 message: errorMessage || 'Paket kapatılırken bir hata oluştu.',
+                color: 'red',
+                icon: React.createElement(IconX, { size: 16 }),
+                autoClose: 5000,
+            });
+            throw error;
+        }
+    },
+
+    fetchCurrentJobNumber: async () => {
+        try {
+            const response = await fetchCurrentJobNumber();
+            set({ currentJobNumber: response.current_job_number });
+            return response.current_job_number;
+        } catch (error) {
+            console.error('Failed to fetch current job number', error);
+            const errorMessage = extractErrorMessage(error);
+            notifications.show({
+                title: 'Hata!',
+                message: errorMessage || 'Güncel iş numarası alınırken bir hata oluştu.',
                 color: 'red',
                 icon: React.createElement(IconX, { size: 16 }),
                 autoClose: 5000,

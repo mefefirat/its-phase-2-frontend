@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import React from 'react';
 import { notifications } from '@mantine/notifications';
 import { IconCheck, IconX } from '@tabler/icons-react';
-import { fetchQrcodesItems, insertQrcodesItem, updateQrcodesItem, deleteQrcodesItem, fetchQrcodesItemById, fetchQrcodesItemsList, fetchQrcodesItemsDropdown, fetchCurrentSerialNumber } from '../services/qrcodes';
+import { fetchQrcodesItems, insertQrcodesItem, updateQrcodesItem, deleteQrcodesItem, fetchQrcodesItemById, fetchQrcodesItemsList, fetchQrcodesItemsDropdown, fetchCurrentOrderNumber, fetchCurrentSerialNumber } from '../services/qrcodes';
 import type { Qrcodes } from '../types/qrcodes';
 import type { PaginatedResponse } from '@/utils/responseHelper';
 import { extractErrorMessage, getUserFriendlyErrorMessage, isBusinessError } from '@/utils/errorHandler';
@@ -10,6 +10,7 @@ import { extractErrorMessage, getUserFriendlyErrorMessage, isBusinessError } fro
 interface QrcodesState {
     items: Qrcodes[];
     dropdownItems: Qrcodes[];
+    currentOrderNumber: number | null;
     currentSerialNumber: number | null;
     loading: boolean;
     page?: number;
@@ -21,6 +22,7 @@ interface QrcodesState {
     setPage: (page: number) => void;
     setPerPage: (perPage: number) => void;
     fetchItemsDropdown: () => Promise<void>;
+    fetchCurrentOrder: () => Promise<void>;
     fetchCurrentSerial: () => Promise<void>;
     fetchItemById: (itemId: string) => Promise<Qrcodes>;
     addItem: (itemData: Partial<Qrcodes>) => Promise<void>;
@@ -31,6 +33,7 @@ interface QrcodesState {
 export const useQrcodesStore = create<QrcodesState>((set, get) => ({
     items: [],
     dropdownItems: [],
+    currentOrderNumber: null,
     currentSerialNumber: null,
     loading: false,
     page: 1,
@@ -130,6 +133,18 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             set({ dropdownItems: [] });
         } finally {
             set({ loading: false });
+        }
+    },
+
+    fetchCurrentOrder: async () => {
+        try {
+            const response = await fetchCurrentOrderNumber();
+            set({ currentOrderNumber: response.current_order_number });
+        } catch (error) {
+            console.error('Failed to fetch current order number', error);
+            // Null set et ve hatayı fırlat (UI'da modal gösterilecek)
+            set({ currentOrderNumber: null });
+            throw error; // UI'ya fırlat - kritik hata
         }
     },
 

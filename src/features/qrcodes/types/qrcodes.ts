@@ -4,6 +4,7 @@ export interface Qrcodes {
     lot: string;
     expiry_date: string;
     quantity: number;
+    order_number: number;
     start_serial_number: string;
     end_serial_number: string;
     current_serial_number: number;

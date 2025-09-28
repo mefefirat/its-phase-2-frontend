@@ -6,7 +6,7 @@ import { notifications } from '@mantine/notifications';
 import { IconPill, IconArrowLeft, IconX, IconDeviceFloppy, IconAlertTriangle, IconCheck } from '@tabler/icons-react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import type { Qrcodes } from '../types/qrcodes';
-import { printWithLabelPrinter, ensurePrinterReady, batchPrintWithLabelPrinter, batchPrintWithSpecificDevice } from '@/utils/printerUtils';
+import { printWithLabelPrinter, ensurePrinterReady, batchPrintWithLabelPrinter, batchPrintWithSpecificDevice, printWithPreparedDevice } from '@/utils/printerUtils';
 import ZebraPrinterSelector, { ZebraPrinterSelectorRef } from '@/shared/printer/ZebraPrinterSelector';
 
 interface QrcodesFormProps {
@@ -16,7 +16,7 @@ interface QrcodesFormProps {
 }
 
 export default function QrcodesForm({ initialData, editMode = false, itemId }: QrcodesFormProps) {
-  const { addItem, editItem, fetchItemById, currentSerialNumber, fetchCurrentSerial } = useQrcodesStore();
+  const { addItem, editItem, fetchItemById, currentOrderNumber, currentSerialNumber, fetchCurrentOrder, fetchCurrentSerial } = useQrcodesStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorModal, setErrorModal] = useState({ opened: false, message: '' });
@@ -42,11 +42,20 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
       lot: '',
       expiry_date: '',
       quantity: 1,
+      order_number: 0,
     },
     validate: {
       gtin: (value) => (!value || value.trim().length < 1 ? 'Lütfen GTIN giriniz' : null),
       lot: (value) => (!value || value.trim().length < 1 ? 'Lütfen LOT giriniz' : null),
       expiry_date: (value) => (!value || value.trim().length < 1 ? 'Lütfen Son Kullanma Tarihi giriniz' : null),
+      order_number: (value) => {
+        if (!value) return 'Lütfen Sipariş Numarası giriniz';
+        const numValue = Number(value);
+        if (isNaN(numValue) || numValue <= 0 || !Number.isInteger(numValue)) {
+          return 'Sipariş numarası pozitif bir tam sayı olmalıdır';
+        }
+        return null;
+      },
       quantity: (value) => {
         if (!value || value <= 0) return 'Lütfen geçerli bir miktar giriniz';
         if (isNaN(Number(value))) return 'Miktar sayı olmalıdır';
@@ -59,8 +68,11 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
     const initializeForm = async () => {
       setIsLoading(true);
       try {
-        // Her zaman current serial number'ı fetch et - kritik işlem
-        await fetchCurrentSerial();
+        // Sadece yeni kayıt oluştururken current order number ve current serial number'ı fetch et
+        if (!finalEditMode) {
+          await fetchCurrentOrder();
+          await fetchCurrentSerial();
+        }
         
         if (finalEditMode && finalItemId) {
           await fetchItemData();
@@ -71,7 +83,7 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
         // Critical hata - modal ile göster
         setErrorModal({
           opened: true,
-          message: 'Seri numarası bilgisi alınamadığı için form kullanılamıyor. Lütfen daha sonra tekrar deneyin.'
+          message: 'Form bilgileri alınamadığı için form kullanılamıyor. Lütfen daha sonra tekrar deneyin.'
         });
         return;
       } finally {
@@ -81,6 +93,18 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
 
     initializeForm();
   }, [finalEditMode, finalItemId]);
+
+  // Current order number güncellendiğinde form'u güncelle
+  useEffect(() => {
+    if (!finalEditMode && currentOrderNumber !== null) {
+      // Eğer backend'den gelen currentOrderNumber 0 veya boş ise 4000001'den başlat
+      const nextOrderNumber = (currentOrderNumber === 0 || !currentOrderNumber) 
+        ? 4000001 
+        : currentOrderNumber + 1;
+      
+      form.setFieldValue('order_number', nextOrderNumber);
+    }
+  }, [currentOrderNumber, finalEditMode]);
 
   const fetchItemData = async () => {
     if (!finalItemId) return;
@@ -93,6 +117,7 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
         lot: itemData.lot,
         expiry_date: itemData.expiry_date,
         quantity: itemData.quantity,
+        order_number: itemData.order_number,
       });
     } catch (error: any) {
       // Store zaten error notification gösterdi
@@ -129,10 +154,101 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
 `;
   };
 
+  // Print Test fonksiyonu - tek test yazdırma işlemi
+  const handlePrintTest = async () => {
+    // Form validasyonu
+    const validation = form.validate();
+    if (validation.hasErrors) {
+      notifications.show({
+        title: 'Form Hatası',
+        message: 'Lütfen önce tüm zorunlu alanları doldurun',
+        color: 'red'
+      });
+      return;
+    }
+
+    const values = form.values;
+
+    // Printer kontrolü
+    if (!selectedPrinter) {
+      notifications.show({
+        title: 'Printer Hatası',
+        message: 'Lütfen yazdırma için bir printer seçin',
+        color: 'red'
+      });
+      return;
+    }
+
+    // BrowserPrint kontrolü
+    if (typeof window === 'undefined' || typeof (window as any).BrowserPrint === 'undefined') {
+      notifications.show({
+        title: 'Printer Hatası',
+        message: 'Zebra BrowserPrint bulunamadı. Lütfen Zebra BrowserPrint uygulamasının yüklü ve çalışır durumda olduğundan emin olun.',
+        color: 'red'
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Test için tek bir serial number oluştur (test-001 formatında)
+      const testSerialNumber = '00000001TEST0001';
+      
+      // ZPL içeriği oluştur
+      const zplContent = generateZPLContent(
+        values.gtin?.trim() || '', 
+        values.lot?.trim() || '', 
+        values.expiry_date?.trim() || '', 
+        testSerialNumber
+      );
+
+      notifications.show({
+        id: 'print-test',
+        title: 'Test Yazdırma',
+        message: 'Test etiketi yazdırılıyor...',
+        color: 'blue',
+        loading: true,
+        autoClose: false
+      });
+
+      // Test yazdırma işlemi
+      const result = await printWithPreparedDevice(selectedPrinter, zplContent, 10000);
+
+      notifications.hide('print-test');
+
+      if (result.success) {
+        notifications.show({
+          title: 'Test Başarılı',
+          message: 'Test etiketi başarıyla yazdırıldı',
+          color: 'green'
+        });
+      } else {
+        notifications.show({
+          title: 'Test Başarısız',
+          message: result.error || result.message || 'Test yazdırma işlemi başarısız',
+          color: 'red'
+        });
+      }
+
+    } catch (error: any) {
+      console.error('Print test failed:', error);
+      
+      notifications.hide('print-test');
+      notifications.show({
+        title: 'Test Başarısız',
+        message: error?.message || 'Beklenmeyen bir hata oluştu',
+        color: 'red'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // UI LAYER - SADECE UI STATE VE LOADING HANDLE ET
   const handleSubmit = async (values: Partial<Qrcodes>) => {
     // Backend geliştirme için print kontrolü - true: print yapar, false: print yapmaz ama sanki yapmış gibi devam eder
-    const enablePrinting = true;
+    const enablePrinting = false;
     
     setIsSubmitting(true);
     
@@ -140,16 +256,18 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
       // Convert quantity to number (form inputs are always strings)
       const quantityValue = parseInt(String(values.quantity || '1'));
 
-      // Generate start and end serial numbers based on quantity
-      const nextSerialStart = (currentSerialNumber || 0) + 1; // Bir sonraki seri numarası
-      const startSerialNumber = nextSerialStart.toString().padStart(8, '0'); // e.g., 00000002
-      const endSerialNumber = (nextSerialStart + quantityValue - 1).toString().padStart(8, '0'); // e.g., 00000011
+      // Generate start and end serial numbers based on current serial number from server
+      // Sunucudan gelen son seri numarasından sonrakini başlat
+      const nextSerialStart = (currentSerialNumber || 0) + 1; // Sunucudan gelen son seri + 1
+      const startSerialNumber = nextSerialStart.toString().padStart(8, '0'); // e.g., 00000001
+      const endSerialNumber = (nextSerialStart + quantityValue - 1).toString().padStart(8, '0'); // e.g., 00000010
       const newCurrentSerialNumber = nextSerialStart + quantityValue - 1; // En son üretilen seri numarası (integer olarak)
 
       const payload: Partial<Qrcodes> = {
         gtin: (values.gtin || '').trim(),
         lot: (values.lot || '').trim(),
         expiry_date: (values.expiry_date || '').trim(),
+        order_number: Number(values.order_number || 0),
         quantity: quantityValue,
         start_serial_number: startSerialNumber,
         end_serial_number: endSerialNumber,
@@ -158,10 +276,20 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
 
   
       // Validate required fields
-      if (!payload.gtin || !payload.lot || !payload.expiry_date || !payload.quantity) {
+      if (!payload.gtin || !payload.lot || !payload.expiry_date || !payload.order_number || !payload.quantity) {
         notifications.show({
           title: 'Eksik Bilgi',
           message: 'Lütfen tüm alanları doldurun',
+          color: 'red'
+        });
+        return;
+      }
+
+      // Validate order_number is a valid integer
+      if (isNaN(payload.order_number) || payload.order_number <= 0) {
+        notifications.show({
+          title: 'Geçersiz Sipariş Numarası',
+          message: 'Sipariş numarası pozitif bir sayı olmalıdır',
           color: 'red'
         });
         return;
@@ -443,36 +571,18 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
       <LoadingOverlay visible={isLoading} />
       <form onSubmit={form.onSubmit(handleSubmit)} autoComplete='off'>
         <Paper p="lg" withBorder mb="lg">
+       
           <Grid>
             <Grid.Col span={6}>
               <TextInput
-                label="GTIN"
-                placeholder="Ör: 1234567890123"
-                {...form.getInputProps('gtin')}
+                label="İş Emri Numarası"
+                type="number"
+                placeholder="Ör: 123456"
+                {...form.getInputProps('order_number')}
                 withAsterisk
                 required
-                description="Global Trade Item Number - Ürün için benzersiz tanımlayıcı"
-              />
-            </Grid.Col>
-            <Grid.Col span={6}>
-              <TextInput
-                label="LOT"
-                placeholder="Ör: LOT123456"
-                {...form.getInputProps('lot')}
-                withAsterisk
-                required
-                description="Parti numarası"
-              />
-            </Grid.Col>
-            <Grid.Col span={6}>
-              <TextInput
-                label="Son Kullanma Tarihi"
-                type="date"
-                placeholder="Ör: 2025-12-31"
-                {...form.getInputProps('expiry_date')}
-                withAsterisk
-                required
-                description="YYYY-MM-DD formatında"
+                description="Sipariş numarası"
+                readOnly
               />
             </Grid.Col>
             <Grid.Col span={6}>
@@ -486,10 +596,54 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
                 description="Üretilecek karekod sayısı"
               />
             </Grid.Col>
+            <Grid.Col span={4}>
+              <TextInput
+                label="GTIN"
+                placeholder="Ör: 1234567890123"
+                {...form.getInputProps('gtin')}
+                withAsterisk
+                required
+                description="Ürün için benzersiz tanımlayıcı"
+              />
+            </Grid.Col>
+            <Grid.Col span={4}>
+              <TextInput
+                label="LOT"
+                placeholder="Ör: LOT123456"
+                {...form.getInputProps('lot')}
+                withAsterisk
+                required
+                description="Parti numarası"
+              />
+            </Grid.Col>
+           
+            <Grid.Col span={4}>
+              <TextInput
+                label="Son Kullanma Tarihi"
+                type="date"
+                placeholder="Ör: 2025-12-31"
+                {...form.getInputProps('expiry_date')}
+                withAsterisk
+                required
+                description="YYYY-MM-DD formatında"
+              />
+            </Grid.Col>
+            
           </Grid>
         </Paper>
 
         <Group justify="flex-end" mt="lg">
+        <Button 
+            type="button"
+            variant="outline"
+            onClick={handlePrintTest}
+            size="xs"  
+            loading={isSubmitting}
+            disabled={isCompleted}
+            leftSection={<IconDeviceFloppy size={16} />}
+          >
+            Print Test
+          </Button>
           <Button 
             type="submit" 
             size="xs" 

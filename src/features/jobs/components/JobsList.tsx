@@ -77,6 +77,7 @@ export default function JobsList({
     <Table.Tr
       key={element.id}
     >
+      <Table.Td>{element.job_number}</Table.Td>
       <Table.Td>{element.material_name}</Table.Td>  
       <Table.Td>{element.planned_items}</Table.Td>
       <Table.Td>{element.scanned_items}</Table.Td>
@@ -156,6 +157,9 @@ export default function JobsList({
       <Table.Td style={{ textAlign: 'center' }}>
         <div style={{ height: 20, backgroundColor: '#f0f0f0', borderRadius: 4 }} />
       </Table.Td>
+      <Table.Td style={{ textAlign: 'center' }}>
+        <div style={{ height: 20, backgroundColor: '#f0f0f0', borderRadius: 4 }} />
+      </Table.Td>
       <Table.Td style={{ minWidth: '250px' }}>
         <div style={{ height: 20, backgroundColor: '#f0f0f0', borderRadius: 4 }} />
       </Table.Td>
@@ -180,6 +184,7 @@ export default function JobsList({
         <Table verticalSpacing="sm" striped highlightOnHover withColumnBorders>
           <Table.Thead style={{ backgroundColor: '#228be61f' }}>
             <Table.Tr>
+              <Table.Th style={{ width: '150px'}} fw={500}>İş Emri Numarası</Table.Th>
               <Table.Th fw={500}>Ürün Adı</Table.Th>
               <Table.Th style={{ width: '120px'}} fw={500}>Üretim Miktarı</Table.Th>
               <Table.Th style={{ width: '120px'}} fw={500}>Taranan Miktar</Table.Th>
@@ -202,7 +207,7 @@ export default function JobsList({
               skeletonRows
             ) : jobs?.length === 0 ? (
               <Table.Tr>
-                <Table.Td colSpan={9}>
+                <Table.Td colSpan={6}>
                   <Text ta="center" c="dimmed" py="xl">
                     İş bulunamadı
                   </Text>

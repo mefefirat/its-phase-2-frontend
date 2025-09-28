@@ -17,12 +17,13 @@ export default function EditJob() {
   
   const jobId = params.id;
 
-  const form = useForm<UpdateJobRequest>({
+  const form = useForm<UpdateJobRequest & { job_number?: number }>({
     initialValues: {
       planned_items: 0,
       lot: '',
       manufacture_date: '',
       expiry_date: '',
+      job_number: 0,
     },
     validate: {
       planned_items: (value) => (value === undefined || value < 0 ? 'Planlanan adet 0 veya daha büyük olmalıdır' : null),
@@ -43,6 +44,7 @@ export default function EditJob() {
           lot: jobData.lot ?? '',
           manufacture_date: toDateOnly(jobData.manufacture_date ?? null),
           expiry_date: toDateOnly(jobData.expiry_date ?? null),
+          job_number: jobData.job_number ?? 0,
         });
       } catch (error: any) {
         notifications.show({
@@ -160,6 +162,14 @@ export default function EditJob() {
             <Grid.Col span={6}>
                <Stack>
                <TextInput
+                label="İş Emri No:"
+                placeholder="Ör: 7000001"
+                {...form.getInputProps('job_number')}
+                required
+                readOnly
+              />
+                
+               <TextInput
                 label="Parti / Batch / Lot No:"
                 placeholder="Ör: LOT-2024-001"
                 {...form.getInputProps('lot')}
@@ -199,7 +209,7 @@ export default function EditJob() {
 
             <Grid.Col span={6}>
 
-              <Paper withBorder p="xs" bg="gray.1" mt="25px" h={266}>
+              <Paper withBorder p="xs" bg="gray.1" mt="25px" h={345}>
                 <Stack gap="0">
                   
                 <Text size="sm"  fw={500} c="dimmed">GTIN</Text>

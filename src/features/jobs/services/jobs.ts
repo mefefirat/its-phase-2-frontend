@@ -123,3 +123,8 @@ export const forceCloseJobPackage = async (jobPackageId: string) => {
     const response = await axiosInstance.patch(`/v1/job-scans/force-close-package/${jobPackageId}`);
     return response.data;
 };
+
+export const fetchCurrentJobNumber = async (): Promise<{ current_job_number: number }> => {
+    const response = await axiosInstance.get('/v1/current-number');
+    return response.data;
+};

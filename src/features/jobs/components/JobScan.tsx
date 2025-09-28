@@ -8,7 +8,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { IconArrowLeft, IconDeviceFloppy, IconQrcode, IconPlus, IconMinus, IconPrinter, IconSettings, IconX, IconChevronDown, IconChevronUp, IconCheck, IconLockX, IconDotsVertical, IconRefresh } from '@tabler/icons-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Job, UpdateJobRequest } from '../types/job';
-import { diagnosePrinterIssues } from '@/utils/printerUtils';
+import { printWithLabelPrinter, isPrinterConfigured, ensurePrinterReady, diagnosePrinterIssues, printWithPreparedDevice } from '@/utils/printerUtils';
 import { normalizeText } from '@/utils/normalizeText';
 import { pharmaValidator } from '@/utils/pharmaValidator';
 import ZebraPrinterSelector, { ZebraPrinterSelectorRef } from '@/shared/printer/ZebraPrinterSelector';
@@ -34,20 +34,16 @@ export default function JobScan() {
   const [isJobInfoExpanded, setIsJobInfoExpanded] = useState(true);
   const depthBgColors = ['#ffffff', '#f8f9fa', '#f1f3f5', '#e9ecef', '#dee2e6'];
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const printerSelectorRef = useRef<ZebraPrinterSelectorRef>(null);
+  const [selectedPrinter, setSelectedPrinter] = useState<any>(null);
   const [overlay, setOverlay] = useState(false);
   const [isScanModalOpen, setIsScanModalOpen] = useState(false);
   const [isCheckingPrinter, setIsCheckingPrinter] = useState(false);
   const [printerDiagnosis, setPrinterDiagnosis] = useState<any>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [selectedPalletPrinter, setSelectedPalletPrinter] = useState<any>(null);
-  const [selectedLabelPrinter, setSelectedLabelPrinter] = useState<any>(null);
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const { closeSidebar } = useSidebarStore();
-  
-  // Printer selector ref'leri
-  const palletPrinterSelectorRef = useRef<ZebraPrinterSelectorRef>(null);
-  const labelPrinterSelectorRef = useRef<ZebraPrinterSelectorRef>(null);
   
   const jobId = params.id;
 
@@ -67,8 +63,8 @@ export default function JobScan() {
   // Yazdırma için gerekli bilgilerin kontrolü
   const checkPrintRequirements = () => {
     const hasRequiredFields = !!(job?.material_name && job?.gtin && job?.lot && job?.expiry_date);
-    const hasPrinters = !!(selectedPalletPrinter && selectedLabelPrinter);
-    setCanPrint(hasRequiredFields && hasPrinters);
+    const hasPrinter = selectedPrinter !== null;
+    setCanPrint(hasRequiredFields && hasPrinter);
   };
 
   // Yazdırma fonksiyonu
@@ -80,8 +76,8 @@ export default function JobScan() {
     expiry_date?: string | null,
     code?: string
   ) => {
-    if (!selectedLabelPrinter) {
-      setErrorMessage('Label printer seçilmemiş. Lütfen yazdırma için label printer seçin.');
+    if (!selectedPrinter) {
+      setErrorMessage('Etiket printer\'ı seçilmemiş. Lütfen yukarıdan bir printer seçin.');
       return;
     }
 
@@ -91,19 +87,40 @@ export default function JobScan() {
       return;
     }
 
+   
     // Code'a göre tip belirleme
     const getTypeLabel = (code?: string) => {
       switch (code) {
-        case 'P': return 'PALET';
-        case 'C': return 'KOLI';
-        case 'S': return 'BAG';
-        case 'B': return 'KOLI ICI KUTU';
-        case 'E': return 'KUCUK BAG';
+        case 'P': return 'PALET ETIKETI';
+        case 'C': return 'KOLI ETIKETI';
+        case 'S': return 'BAG ETIKETI';
+        case 'B': return 'KOLI ICI KUTU ETIKETI';
+        case 'E': return 'KUCUK BAG ETIKETI';
         default: return 'BAG ETIKETI';
       }
     };
 
+    const zplContent = `^XA
+^PW800
+^LL640
+^FO30,30^A0N,35,30^FDURUN^FS
+^FO30,90^A0N,30,28^FD${normalizeText(material_name || '')}^FS
+^FO30,170^GB740,0,2^FS
+^FO30,200^A0N,30,28^FDGTIN:^FS
+^FO160,200^A0N,30,28^FD${gtin || ''}^FS
+^FO400,200^A0N,30,28^FDBATCH/LOT:^FS
+^FO580,200^A0N,30,28^FD${lot || ''}^FS
+^FO30,250^A0N,30,28^FDSKT:^FS
+^FO160,250^A0N,30,28^FD${expiry_date || ''}^FS
+^FO30,300^GB740,0,2^FS
+^FO30,320^A0N,50,50^FD${getTypeLabel(code)}^FS
+^FO30,380^GB740,0,2^FS
+^FO30,450^BY3,3,100^BCN,100,Y,N,N
+^FD${barcode}^FS
+^XZ`;
 
+
+/*
     const zplContent = `^XA
 ^PW479
 ^LL319
@@ -135,21 +152,26 @@ export default function JobScan() {
 ^FO0,290^FB479,1,0,C,0^FD${barcode}^FS
 
 ^XZ`;
+*/
 
 
 
-
+    // Debug için değişkenleri logla
+    console.log("Print değişkenleri:", {
+      material_name,
+      gtin,
+      lot,
+      expiry_date,
+      barcode,
+      code,
+      normalizedMaterialName: normalizeText(material_name || '')
+    });
+    
+    console.log("ZPL Content:", zplContent);
     console.log("Yazdırma işlemi başlatılıyor...");
     
     try {
-      // Seçilen label printer ile yazdırma yapacağız
-      const result = await new Promise<{ success: boolean; error?: string }>((resolve) => {
-        selectedLabelPrinter.send(
-          zplContent,
-          () => resolve({ success: true }),
-          (error: string) => resolve({ success: false, error })
-        );
-      });
+      const result = await printWithPreparedDevice(selectedPrinter, zplContent);
       console.log("Print result:", result);
       
       if (result.success) {
@@ -157,9 +179,11 @@ export default function JobScan() {
         setErrorMessage(null); // Clear any previous errors on success
       } else {
         console.error("Yazdırma hatası:", result);
-        let errorMsg = `Yazdırma hatası: ${result.error || 'Bilinmeyen hata'}`;
+        let errorMsg = `Yazdırma hatası: ${result.message}`;
         
         if (result.error) {
+          errorMsg += ` - ${result.error}`;
+          
           // Özel hata mesajları ve çözüm önerileri
           if (result.error.includes('connection closed') || result.error.includes('writing to port')) {
             errorMsg += '\n\n💡 Çözüm önerileri:\n';
@@ -217,10 +241,10 @@ export default function JobScan() {
     fetchJobData();
   }, [jobId]);
 
-  // Job verisi yüklendiğinde yazdırma gereksinimlerini kontrol et
+  // Job verisi ve selectedPrinter değiştiğinde yazdırma gereksinimlerini kontrol et
   useEffect(() => {
     checkPrintRequirements();
-  }, [job, selectedPalletPrinter, selectedLabelPrinter]);
+  }, [job, selectedPrinter]);
 
   // Paket hiyerarşisini sayfa açılışında yükle
   useEffect(() => {
@@ -377,8 +401,6 @@ export default function JobScan() {
         barcode: serialNumber, // Serial değerini gönder
       });
 
-        console.log("RESPONSEEEEE",response);
-        // API'den gelen scanned_items zaten toplam değer
         if (response?.scanned_items !== undefined) {
           setScannedItems(response.scanned_items);
         }
@@ -642,6 +664,49 @@ export default function JobScan() {
       <LoadingOverlay visible={isLoading} />
       
       {/* Job Information */}
+      
+      <Paper withBorder p="lg" mb="lg">
+        <ZebraPrinterSelector
+          ref={printerSelectorRef}
+          label="Printer Seçin"
+          placeholder="Printer seçin"
+          storeType="label"
+          showRefreshButton={true}
+          autoLoadOnMount={true}
+          disabled={false}
+          onChange={(device, deviceId) => {
+            setSelectedPrinter(device);
+          }}
+          onError={(error) => {
+            setErrorMessage(error);
+          }}
+        />
+      </Paper>
+      
+      {(!canPrint) && (
+        <Paper p="sm" bg="red.0" withBorder mb="lg">
+          {!canPrint && (
+            <>
+              <Text size="sm" c="red" fw={500}>
+                ⚠️ Etiket yazdırmak için gerekli bilgiler eksik veya printer ayarlanmamış:
+              </Text>
+              <Stack gap="xs" mt="xs">
+                {!job?.material_name && <Text size="xs" c="red">• Material Name eksik</Text>}
+                {!job?.gtin && <Text size="xs" c="red">• GTIN eksik</Text>}
+                {!job?.lot && <Text size="xs" c="red">• Lot eksik</Text>}
+                {!job?.expiry_date && <Text size="xs" c="red">• Son Kullanma Tarihi eksik</Text>}
+                {!selectedPrinter && (
+                  <Text size="xs" c="red">• Printer seçilmemiş (yukarıdan bir printer seçin)</Text>
+                )}
+              </Stack>
+            </>
+          )}
+
+         
+        </Paper>
+      )}
+
+      
       <Paper withBorder p="lg" mb="lg" style={{ position: 'relative' }}>
         <Group justify="space-between" mb="10px">
           <Text size="lg" fw={600}>İş Bilgileri</Text>
@@ -654,9 +719,6 @@ export default function JobScan() {
             {isJobInfoExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
           </ActionIcon>
         </Group>
-
-       
-        
         {isJobInfoExpanded && (
           <>
             <Grid>
@@ -693,46 +755,6 @@ export default function JobScan() {
         )}
       </Paper>
 
-      <Paper withBorder p="lg" mb="lg">
-          <Title order={3} mb="md">Printer Ayarları</Title>
-          <Grid>
-            <Grid.Col span={6}>
-              <ZebraPrinterSelector
-                ref={palletPrinterSelectorRef}
-                label="Palet Printeri Seçin"
-                placeholder="Palet yazdırmak için bir printer seçin"
-                storeType="pallet"
-                showRefreshButton={true}
-                autoLoadOnMount={true}
-                disabled={false}
-                onChange={(device, deviceId) => {
-                  setSelectedPalletPrinter(device);
-                }}
-                onError={(error) => {
-                  console.error('Palet printer hatası:', error);
-                }}
-              />
-            </Grid.Col>
-            <Grid.Col span={6}>
-              <ZebraPrinterSelector
-                ref={labelPrinterSelectorRef}
-                label="Etiket Printeri Seçin"
-                placeholder="Etiket yazdırmak için bir printer seçin"
-                storeType="label"
-                showRefreshButton={true}
-                autoLoadOnMount={true}
-                disabled={false}
-                onChange={(device, deviceId) => {
-                  setSelectedLabelPrinter(device);
-                }}
-                onError={(error) => {
-                  console.error('Label printer hatası:', error);
-                }}
-              />
-            </Grid.Col>
-          </Grid>
-        </Paper>
-
       {isCompleted && (
         <Paper withBorder p="lg" mb="lg" bg="green.0">
           <Group align="center" gap="sm">
@@ -750,27 +772,7 @@ export default function JobScan() {
       {/* error message area */}
 
 
-      {(!canPrint) && (
-        <Paper p="sm" bg="red.0" withBorder mb="lg">
-          {!canPrint && (
-            <>
-              <Text size="sm" c="red" fw={500}>
-                ⚠️ Etiket yazdırmak için gerekli bilgiler eksik veya printer seçilmemiş:
-              </Text>
-              <Stack gap="xs" mt="xs">
-                {!job?.material_name && <Text size="xs" c="red">• Material Name eksik</Text>}
-                {!job?.gtin && <Text size="xs" c="red">• GTIN eksik</Text>}
-                {!job?.lot && <Text size="xs" c="red">• Lot eksik</Text>}
-                {!job?.expiry_date && <Text size="xs" c="red">• Son Kullanma Tarihi eksik</Text>}
-                {!selectedLabelPrinter && <Text size="xs" c="red">• Label Printer seçilmemiş</Text>}
-                {!selectedPalletPrinter && <Text size="xs" c="red">• Palet Printer seçilmemiş</Text>}
-              </Stack>
-            </>
-          )}
-
-         
-        </Paper>
-      )}
+     
 
       {/* Printer Diagnostics */}
       {showDiagnostics && printerDiagnosis && (
@@ -859,9 +861,18 @@ export default function JobScan() {
       <Paper withBorder p="lg" mb="lg">
         <Button 
           onClick={async () => {
-            // Modal'ı hemen aç, printer kontrolü yapmayacağız çünkü artık manuel seçim yapıyoruz
+            // Modal'ı hemen aç, ardından arka planda printer kontrolü yap
             setIsScanModalOpen(true);
             setErrorMessage(null);
+            
+            // Printer seçilmişse kontrolünü yap
+            if (selectedPrinter) {
+              setIsCheckingPrinter(true);
+              // Printer hazırlık kontrolü burada yapılabilir
+              setIsCheckingPrinter(false);
+            } else {
+              setErrorMessage('Lütfen önce bir printer seçin');
+            }
           }}
         > KAREKOD OKUTMAYA BAŞLA</Button>
       </Paper>
