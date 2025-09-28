@@ -85,10 +85,4 @@ export const routes: AppRoute[] = [
     element: lazy(() => import("@/features/qrcodes/components/QrcodesForm")) 
   },
   
-  // Settings routes
-  { 
-    path: "/settings/printer", 
-    element: lazy(() => import("@/features/settings/components/PrinterSettings")) 
-  },
-  
 ];
