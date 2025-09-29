@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import React from 'react';
 import { notifications } from '@mantine/notifications';
 import { IconCheck, IconX } from '@tabler/icons-react';
-import { fetchQrcodesItems, insertQrcodesItem, updateQrcodesItem, deleteQrcodesItem, fetchQrcodesItemById, fetchQrcodesItemsList, fetchQrcodesItemsDropdown, fetchCurrentOrderNumber, fetchCurrentSerialNumber } from '../services/qrcodes';
+import { fetchQrcodesItems, insertQrcodesItem, updateQrcodesItem, deleteQrcodesItem, fetchQrcodesItemById, fetchQrcodesItemsList, fetchQrcodesItemsDropdown, fetchCurrentOrderNumber, fetchCurrentSerialNumber, completeQrcodesItem } from '../services/qrcodes';
 import type { Qrcodes } from '../types/qrcodes';
 import type { PaginatedResponse } from '@/utils/responseHelper';
 import { extractErrorMessage, getUserFriendlyErrorMessage, isBusinessError } from '@/utils/errorHandler';
@@ -18,9 +18,9 @@ interface QrcodesState {
     total?: number;
     total_pages?: number;
     fetchItems: () => Promise<void>;
-    fetchItemsList: () => Promise<void>;
-    setPage: (page: number) => void;
-    setPerPage: (perPage: number) => void;
+    fetchItemsList: (status?: string) => Promise<void>;
+    setPage: (page: number, status?: string) => void;
+    setPerPage: (perPage: number, status?: string) => void;
     fetchItemsDropdown: () => Promise<void>;
     fetchCurrentOrder: () => Promise<void>;
     fetchCurrentSerial: () => Promise<void>;
@@ -28,6 +28,7 @@ interface QrcodesState {
     addItem: (itemData: Partial<Qrcodes>) => Promise<void>;
     editItem: (itemId: string, updatedData: Partial<Qrcodes>) => Promise<void>;
     removeItem: (itemId: string) => Promise<void>;
+    completeItem: (itemId: string) => Promise<void>;
 }
 
 export const useQrcodesStore = create<QrcodesState>((set, get) => ({
@@ -41,14 +42,14 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
     total: 0,
     total_pages: 0,
 
-    setPage: (page: number) => {
+    setPage: (page: number, status?: string) => {
         set({ page });
-        get().fetchItemsList();
+        get().fetchItemsList(status);
     },
 
-    setPerPage: (perPage: number) => {
+    setPerPage: (perPage: number, status?: string) => {
         set({ per_page: perPage, page: 1 });
-        get().fetchItemsList();
+        get().fetchItemsList(status);
     },
 
     // READ OPERATIONS - Liste yüklenirken hata kritik değil, empty state göster
@@ -82,12 +83,13 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
         }
     },
 
-    fetchItemsList: async () => {
+    fetchItemsList: async (status?: string) => {
         set({ loading: true });
         try {
             const response = await fetchQrcodesItemsList({
                 page: get().page,
                 per_page: get().per_page,
+                status: status,
             });
 
             set({ 
@@ -310,6 +312,55 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
                 notifications.show({
                     title: 'Hata!',
                     message: 'Qrcodes öğesi silinirken bir hata oluştu.',
+                    color: 'red',
+                    icon: React.createElement(IconX, { size: 16 }),
+                    autoClose: 5000,
+                });
+            }
+            
+            throw error; // UI'ya fırlat
+        }
+    },
+
+    completeItem: async (itemId) => {
+        try {
+            await completeQrcodesItem(itemId);
+            await get().fetchItemsList(); // Listeyi yenile
+            
+            // Başarı notification'ı store seviyesinde göster
+            notifications.show({
+                title: 'Başarılı',
+                message: 'Qrcodes öğesi başarıyla tamamlandı',
+                color: 'green',
+                icon: React.createElement(IconCheck, { size: 16 }),
+                autoClose: 3000,
+            });
+        } catch (error) {
+            console.error('Failed to complete qrcodes item', error);
+            const errorMessage = extractErrorMessage(error);
+            
+            // Business logic errors handle et
+            if (errorMessage.includes('already completed') || 
+                errorMessage.includes('invalid status')) {
+                notifications.show({
+                    title: 'Hata',
+                    message: 'Bu Qrcodes öğesi zaten tamamlanmış veya tamamlanamaz durumda',
+                    color: 'red',
+                    icon: React.createElement(IconX, { size: 16 }),
+                    autoClose: 5000,
+                });
+            } else if (errorMessage.includes('not found')) {
+                notifications.show({
+                    title: 'Hata',
+                    message: 'Qrcodes öğesi bulunamadı',
+                    color: 'red',
+                    icon: React.createElement(IconX, { size: 16 }),
+                    autoClose: 5000,
+                });
+            } else {
+                notifications.show({
+                    title: 'Hata!',
+                    message: 'Qrcodes öğesi tamamlanırken bir hata oluştu.',
                     color: 'red',
                     icon: React.createElement(IconX, { size: 16 }),
                     autoClose: 5000,

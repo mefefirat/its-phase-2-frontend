@@ -116,16 +116,22 @@ import {
             items: [
               {
                 id: 'its-phase-1-jobs-new',
-                label: 'Yeni İş Başlat',
+                label: 'İş Emri Oluştur',
                 path: '/qrcodes/add',
                 icon: IconCirclePlus
+              },
+              {
+                id: 'its-phase-1-jobs-new',
+                label: 'İş Emri Listesi',
+                path: '/qrcodes/?status=pending',
+                icon: IconList
               }
               ,
               {
                 id: 'its-phase-1-jobs-draft',
                 label: 'Tamamlanmış İşler',
-                path: '/qrcodes/list',
-                icon: IconRotate
+                path: '/qrcodes/?status=completed',
+                icon: IconChecklist
               },
              
             ]

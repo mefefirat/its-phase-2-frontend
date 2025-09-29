@@ -12,6 +12,7 @@ interface QrcodesParams extends PaginationParams {
     lot?: string;
     order_number?: number;
     search_term?: string;
+    status?: string;
 }
 
 // SERVICE LAYER - SADECE API ÇAĞRILARI
@@ -45,6 +46,11 @@ export const fetchQrcodesItemsList = async (params: QrcodesParams = {}) => {
         if (params.order_number) {
             requestParams.order_number = params.order_number;
         }
+    }
+    
+    // Status parameter
+    if (params.status) {
+        requestParams.status = params.status;
     }
     
     // Pagination params (if provided)
@@ -101,4 +107,9 @@ export const fetchCurrentSerialNumber = async () => {
     return response.data;
 };
 
+export const completeQrcodesItem = async (itemId: string): Promise<Qrcodes> => {
+    const response = await axiosInstance.patch(`/v1/qrcodes/${itemId}/complete`);
+    console.log('✅ Qrcodes item completed:', itemId);
+    return response.data;
+};
 

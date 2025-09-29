@@ -8,8 +8,11 @@ export interface Qrcodes {
     start_serial_number: string;
     end_serial_number: string;
     current_serial_number: number;
+    status: string;
     created_at?: string;
     created_by?: string;
     updated_at?: string;
     updated_by?: string;
+    completed_at?: string;
+    completed_by?: string;
 }
