@@ -20,11 +20,11 @@ function isValidGTIN(gtin: string): boolean {
     return calc === check;
   }
   
-  function parseExpiry(yyMMdd: string): string | null {
-    if (!/^\d{6}$/.test(yyMMdd)) return null;
-    const yy = parseInt(yyMMdd.slice(0, 2), 10);
-    const mm = parseInt(yyMMdd.slice(2, 4), 10);
-    let dd = parseInt(yyMMdd.slice(4, 6), 10);
+  function parseExpiry(ddMMYY: string): string | null {
+    if (!/^\d{6}$/.test(ddMMYY)) return null;
+    let dd = parseInt(ddMMYY.slice(0, 2), 10);
+    const mm = parseInt(ddMMYY.slice(2, 4), 10);
+    const yy = parseInt(ddMMYY.slice(4, 6), 10);
     if (mm < 1 || mm > 12) return null;
     const year = 2000 + yy;
     const lastDay = new Date(year, mm, 0).getDate();
@@ -36,7 +36,7 @@ function isValidGTIN(gtin: string): boolean {
   type AISpec = { type: "fixed" | "var"; len?: number; max?: number; minLen?: number };
   const AIs: Record<string, AISpec> = {
     "01": { type: "var", minLen: 13, max: 14 }, // GTIN - 13 veya 14 hane
-    "17": { type: "fixed", len: 6  }, // YYMMDD
+    "17": { type: "fixed", len: 6  }, // DDMMYY
     "10": { type: "var",   max: 20 }, // LOT
     "21": { type: "var",   max: 20 }, // SERIAL
   };
