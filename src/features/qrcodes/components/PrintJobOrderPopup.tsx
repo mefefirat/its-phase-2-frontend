@@ -20,7 +20,7 @@ export default function PrintJobOrderPopup({ opened, onClose, jobOrder }: PrintJ
   const { completeItem } = useQrcodesStore();
   
   // Test modu - burada değiştirerek normal/test mod arasında geçiş yapabilirsiniz
-  const mode = 'test';
+  const mode = 'normal';
 
   const handlePrinterTest = async () => {
     if (!selectedPrinter && mode !== 'test') {

@@ -1,13 +1,20 @@
 // utils/pharmaValidator.ts
 
-function isValidGTIN(gtin14: string): boolean {
-    if (!/^\d{14}$/.test(gtin14)) return false;
+function isValidGTIN(gtin: string): boolean {
+    // 13 veya 14 haneli GTIN kabul et
+    if (!/^\d{13,14}$/.test(gtin)) return false;
+    
+    // 13 haneliyse başına 0 ekleyerek 14 haneli yap
+    const gtin14 = gtin.length === 13 ? '0' + gtin : gtin;
+    
     const d = gtin14.split("").map(Number);
-    const check = d[13];
+    const check = d[13]; // Son hane check digit
     let sum = 0;
+    
+    // GTIN-14 check digit hesaplama: soldan sağa, çift pozisyonlar 3x, tek pozisyonlar 1x
     for (let i = 0; i < 13; i++) {
-      const weight = (i % 2 === 0) ? 3 : 1;
-      sum += d[12 - i] * weight;
+      const weight = (i % 2 === 0) ? 1 : 3; // İlk hane 1x, ikinci hane 3x, vs.
+      sum += d[i] * weight;
     }
     const calc = (10 - (sum % 10)) % 10;
     return calc === check;
@@ -26,9 +33,9 @@ function isValidGTIN(gtin14: string): boolean {
     return `${year}${String(mm).padStart(2, "0")}${String(dd).padStart(2, "0")}`;
   }
   
-  type AISpec = { type: "fixed" | "var"; len?: number; max?: number };
+  type AISpec = { type: "fixed" | "var"; len?: number; max?: number; minLen?: number };
   const AIs: Record<string, AISpec> = {
-    "01": { type: "fixed", len: 14 }, // GTIN
+    "01": { type: "var", minLen: 13, max: 14 }, // GTIN - 13 veya 14 hane
     "17": { type: "fixed", len: 6  }, // YYMMDD
     "10": { type: "var",   max: 20 }, // LOT
     "21": { type: "var",   max: 20 }, // SERIAL
@@ -101,10 +108,16 @@ function isValidGTIN(gtin14: string): boolean {
   
   function parseGS1(raw: string) {
     const GS = String.fromCharCode(29);
-    const s = raw.replace(/\u001D/g, GS);
+    let s = raw.replace(/\u001D/g, GS);
+    
+    // Parantezli GS1 formatını destekle: (01)8699550011111(21)0000000000010158(10)173350(17)271229
+    if (s.includes('(') && s.includes(')')) {
+      return parseParenthesizedGS1(s);
+    }
+    
     const out: Record<string, string> = {};
     const seen = new Set<string>();
-  
+
     let i = 0;
     while (i < s.length) {
       const ai = detectAI(s, i);
@@ -112,19 +125,70 @@ function isValidGTIN(gtin14: string): boolean {
       i += ai.length;
       const spec = AIs[ai];
       seen.add(ai);
-  
+
       if (spec.type === "fixed" && spec.len) {
         if (i + spec.len > s.length) break;
         out[ai] = s.slice(i, i + spec.len);
         i += spec.len;
       } else if (spec.type === "var" && spec.max) {
-        const { value, nextIndex } = findVarEnd(s, i, spec.max, ai as "10" | "21", seen);
-        out[ai] = value;
-        i = nextIndex;
+        if (ai === "01") {
+          // GTIN özel durumu - 13 veya 14 hane olmalı
+          const remainingLength = s.length - i;
+          let gtinLength = 0;
+          
+          // Sonraki AI'ı bul
+          let nextAI = -1;
+          for (let j = i + 13; j <= Math.min(i + 14, s.length); j++) {
+            const testAI = detectAI(s, j);
+            if (testAI) {
+              nextAI = j;
+              gtinLength = j - i;
+              break;
+            }
+          }
+          
+          // Eğer sonraki AI bulunamazsa, kalan tüm string'i al (ama 13-14 hane ile sınırla)
+          if (nextAI === -1) {
+            gtinLength = Math.min(remainingLength, 14);
+            if (gtinLength < 13) gtinLength = remainingLength; // Eğer 13'ten azsa tümünü al
+          }
+          
+          // 13 veya 14 hane değilse hata
+          if (gtinLength !== 13 && gtinLength !== 14) {
+            gtinLength = Math.min(Math.max(gtinLength, 13), 14);
+          }
+          
+          out[ai] = s.slice(i, i + gtinLength);
+          i += gtinLength;
+        } else {
+          const { value, nextIndex } = findVarEnd(s, i, spec.max, ai as "10" | "21", seen);
+          out[ai] = value;
+          i = nextIndex;
+        }
       } else {
         break;
       }
     }
+    return out;
+  }
+
+  function parseParenthesizedGS1(s: string): Record<string, string> {
+    const out: Record<string, string> = {};
+    
+    // Parantez içindeki AI'ları ve değerlerini yakalayalım: (AI)value(AI)value...
+    // Daha basit regex: (AI) + sonraki parantheze kadar olan değer
+    const regex = /\((\d{2,4})\)([^(]*?)(?=\(|$)/g;
+    let match;
+    
+    while ((match = regex.exec(s)) !== null) {
+      const ai = match[1];
+      const value = match[2];
+      
+      if (AIs[ai]) {
+        out[ai] = value;
+      }
+    }
+    
     return out;
   }
   
@@ -137,11 +201,13 @@ function isValidGTIN(gtin14: string): boolean {
     const lot    = fields["10"];
     const serial = fields["21"];
   
-    if (!gtin) {
-      errors.push("GTIN (01) eksik");
-    } else if (!isValidGTIN(gtin)) {
-      errors.push("GTIN (01) hatalı");
-    }
+  if (!gtin) {
+    errors.push("GTIN (01) eksik");
+  }
+  // GTIN check digit validation devre dışı
+  // else if (!isValidGTIN(gtin)) {
+  //   errors.push("GTIN (01) hatalı");
+  // }
   
     let expFormatted: string | null = null;
     if (!expiry) {

@@ -6,8 +6,6 @@ import { notifications } from '@mantine/notifications';
 import { IconPill, IconArrowLeft, IconX, IconDeviceFloppy, IconAlertTriangle, IconCheck } from '@tabler/icons-react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import type { Qrcodes } from '../types/qrcodes';
-import { printWithLabelPrinter, ensurePrinterReady, batchPrintWithLabelPrinter, batchPrintWithSpecificDevice, printWithPreparedDevice } from '@/utils/printerUtils';
-import ZebraPrinterSelector, { ZebraPrinterSelectorRef } from '@/shared/printer/ZebraPrinterSelector';
 
 interface QrcodesFormProps {
   initialData?: Partial<Qrcodes>;
@@ -22,11 +20,9 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
   const [errorModal, setErrorModal] = useState({ opened: false, message: '' });
   const [isCompleted, setIsCompleted] = useState(false);
   const [completionModal, setCompletionModal] = useState({ opened: false, message: '' });
-  const [selectedPrinter, setSelectedPrinter] = useState<any>(null);
   const navigate = useNavigate();
   const params = useParams<{ id: string }>();
   const location = useLocation();
-  const printerSelectorRef = useRef<ZebraPrinterSelectorRef>(null);
   
   // URL'den editMode ve itemId'yi belirle
   const isEditModeFromUrl = location.pathname.includes('/edit/');
@@ -131,125 +127,9 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
     }
   };
 
-  // ZPL template function with dynamic data replacement
-  const generateZPLContent = (gtin: string, lot: string, expiry_date: string, serial_number: string): string => {
-    // Format expiry date from YYYY-MM-DD to YYMMDD format for ZPL
-    const formattedExpiry = expiry_date.replace(/-/g, '').substring(2); // Remove dashes and take last 6 digits (YYMMDD)
-    
-    let start_number = 1;
 
 
-    return `^XA
-
-^FO15,30
-^BXN,4,200
-^FD(01)${gtin}(21)${serial_number}(10)${lot}(17)${formattedExpiry}^FS
-
-^FO120,30^A0N,18,18^FD(01) ${gtin}^FS
-^FO120,55^A0N,18,18^FD(21) ${serial_number}^FS
-^FO120,80^A0N,18,18^FD(10) ${lot}^FS
-^FO120,105^A0N,18,18^FD(17) ${formattedExpiry}^FS
-
-^XZ
-`;
-  };
-
-  // Print Test fonksiyonu - tek test yazdırma işlemi
-  const handlePrintTest = async () => {
-    // Form validasyonu
-    const validation = form.validate();
-    if (validation.hasErrors) {
-      notifications.show({
-        title: 'Form Hatası',
-        message: 'Lütfen önce tüm zorunlu alanları doldurun',
-        color: 'red'
-      });
-      return;
-    }
-
-    const values = form.values;
-
-    // Printer kontrolü
-    if (!selectedPrinter) {
-      notifications.show({
-        title: 'Printer Hatası',
-        message: 'Lütfen yazdırma için bir printer seçin',
-        color: 'red'
-      });
-      return;
-    }
-
-    // BrowserPrint kontrolü
-    if (typeof window === 'undefined' || typeof (window as any).BrowserPrint === 'undefined') {
-      notifications.show({
-        title: 'Printer Hatası',
-        message: 'Zebra BrowserPrint bulunamadı. Lütfen Zebra BrowserPrint uygulamasının yüklü ve çalışır durumda olduğundan emin olun.',
-        color: 'red'
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      // Test için tek bir serial number oluştur (test-001 formatında)
-      const testSerialNumber = '00000001TEST0001';
-      
-      // ZPL içeriği oluştur
-      const zplContent = generateZPLContent(
-        values.gtin?.trim() || '', 
-        values.lot?.trim() || '', 
-        values.expiry_date?.trim() || '', 
-        testSerialNumber
-      );
-
-      notifications.show({
-        id: 'print-test',
-        title: 'Test Yazdırma',
-        message: 'Test etiketi yazdırılıyor...',
-        color: 'blue',
-        loading: true,
-        autoClose: false
-      });
-
-      // Test yazdırma işlemi
-      const result = await printWithPreparedDevice(selectedPrinter, zplContent, 10000);
-
-      notifications.hide('print-test');
-
-      if (result.success) {
-        notifications.show({
-          title: 'Test Başarılı',
-          message: 'Test etiketi başarıyla yazdırıldı',
-          color: 'green'
-        });
-      } else {
-        notifications.show({
-          title: 'Test Başarısız',
-          message: result.error || result.message || 'Test yazdırma işlemi başarısız',
-          color: 'red'
-        });
-      }
-
-    } catch (error: any) {
-      console.error('Print test failed:', error);
-      
-      notifications.hide('print-test');
-      notifications.show({
-        title: 'Test Başarısız',
-        message: error?.message || 'Beklenmeyen bir hata oluştu',
-        color: 'red'
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // UI LAYER - SADECE UI STATE VE LOADING HANDLE ET
   const handleSubmit = async (values: Partial<Qrcodes>) => {
-    // Backend geliştirme için print kontrolü - true: print yapar, false: print yapmaz ama sanki yapmış gibi devam eder
-    const enablePrinting = true;
-    
     setIsSubmitting(true);
     
     try {
@@ -257,11 +137,10 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
       const quantityValue = parseInt(String(values.quantity || '1'));
 
       // Generate start and end serial numbers based on current serial number from server
-      // Sunucudan gelen son seri numarasından sonrakini başlat
-      const nextSerialStart = (currentSerialNumber || 0) + 1; // Sunucudan gelen son seri + 1
-      const startSerialNumber = nextSerialStart.toString().padStart(8, '0'); // e.g., 00000001
-      const endSerialNumber = (nextSerialStart + quantityValue - 1).toString().padStart(8, '0'); // e.g., 00000010
-      const newCurrentSerialNumber = nextSerialStart + quantityValue - 1; // En son üretilen seri numarası (integer olarak)
+      const nextSerialStart = (currentSerialNumber || 0) + 1;
+      const startSerialNumber = nextSerialStart.toString().padStart(8, '0');
+      const endSerialNumber = (nextSerialStart + quantityValue - 1).toString().padStart(8, '0');
+      const newCurrentSerialNumber = nextSerialStart + quantityValue - 1;
 
       const payload: Partial<Qrcodes> = {
         gtin: (values.gtin || '').trim(),
@@ -274,7 +153,6 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
         current_serial_number: newCurrentSerialNumber,
       };
 
-  
       // Validate required fields
       if (!payload.gtin || !payload.lot || !payload.expiry_date || !payload.order_number || !payload.quantity) {
         notifications.show({
@@ -305,140 +183,15 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
         return;
       }
 
-      // Check printer configuration (only if printing is enabled)
-      if (enablePrinting) {
-        // Kullanıcı tarafından seçilen printer'ı kontrol et
-        if (!selectedPrinter) {
-          notifications.show({
-            title: 'Printer Hatası',
-            message: 'Lütfen yazdırma için bir printer seçin',
-            color: 'red'
-          });
-          return;
-        }
-        
-        // BrowserPrint servisinin mevcut olup olmadığını kontrol et
-        if (typeof window === 'undefined' || typeof (window as any).BrowserPrint === 'undefined') {
-          notifications.show({
-            title: 'Printer Hatası',
-            message: 'Zebra BrowserPrint bulunamadı. Lütfen Zebra BrowserPrint uygulamasının yüklü ve çalışır durumda olduğundan emin olun.',
-            color: 'red'
-          });
-          return;
-        }
-        
-        // Seçili printer'ın geçerli olup olmadığını kontrol et
-        if (!selectedPrinter.uid || !selectedPrinter.send) {
-          notifications.show({
-            title: 'Printer Hatası',
-            message: 'Seçilen printer geçersiz. Lütfen başka bir printer seçin veya printer listesini yenileyin.',
-            color: 'red'
-          });
-          return;
-        }
-      }
-
-      // Print labels based on quantity
-      let successCount = 0;
-      let failCount = 0;
-      const errors: string[] = [];
-
-      notifications.show({
-        id: 'printing-progress',
-        title: 'Yazdırma İşlemi',
-        message: `${quantity} adet etiket ${enablePrinting ? 'yazdırılıyor' : 'simüle ediliyor'}...`,
-        color: 'blue',
-        loading: true,
-        autoClose: false
+      // İş emrini oluştur
+      await addItem(payload);
+      
+      // İşlem tamamlandı durumunu ayarla ve modal göster
+      setIsCompleted(true);
+      setCompletionModal({
+        opened: true,
+        message: `İş emri başarıyla oluşturuldu. ${quantityValue} adet etiket için hazır.`
       });
-
-      if (enablePrinting) {
-        // Gerçek yazdırma - optimized batch printing
-        const zplContents: string[] = [];
-        
-        // Generate all ZPL contents first
-        for (let i = 1; i <= quantity; i++) {
-          const serial_number = (nextSerialStart + i - 1).toString().padStart(16, '0');
-          const zplContent = generateZPLContent(payload.gtin, payload.lot, payload.expiry_date, serial_number);
-          zplContents.push(zplContent);
-        }
-        
-        // Batch print with selected printer
-        const batchResult = await batchPrintWithSpecificDevice(
-          selectedPrinter,
-          zplContents,
-          (current, total, success, message) => {
-            // Update progress in real-time
-            if (success) {
-              successCount++;
-            } else {
-              failCount++;
-            }
-            
-            notifications.update({
-              id: 'printing-progress',
-              title: 'Yazdırma İşlemi',
-              message: `${current}/${total} etiket yazdırıldı (Başarılı: ${successCount}, Hatalı: ${failCount})`,
-              color: failCount > 0 ? 'orange' : 'blue',
-              loading: current < total,
-              autoClose: false
-            });
-          }
-        );
-        
-        successCount = batchResult.successCount;
-        failCount = batchResult.failCount;
-        errors.push(...batchResult.errors);
-        
-      } else {
-        // Yazdırma simülasyonu - simulate progress updates
-        for (let i = 1; i <= quantity; i++) {
-          successCount++;
-          
-          notifications.update({
-            id: 'printing-progress',
-            title: 'Yazdırma İşlemi',
-            message: `${i}/${quantity} etiket simüle edildi`,
-            color: 'blue',
-            loading: i < quantity,
-            autoClose: false
-          });
-          
-          // Add small delay to show progress
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
-      }
-
-      // Show final result
-      notifications.hide('printing-progress');
-
-      if (successCount === quantity) {
-        await addItem(payload);
-        
-        // Set completion state and show completion modal
-        setIsCompleted(true);
-        setCompletionModal({
-          opened: true,
-          message: `${quantity} adet karekod başarıyla üretildi ve yazdırıldı.`
-        });
-      } else if (successCount > 0) {
-        notifications.show({
-          title: 'Kısmi Başarı',
-          message: `${successCount}/${quantity} etiket yazdırıldı. ${failCount} etiket başarısız.`,
-          color: 'orange'
-        });
-        
-        // Show detailed errors
-        if (errors.length > 0) {
-          console.error('Printing errors:', errors);
-        }
-      } else {
-        notifications.show({
-          title: 'Yazdırma Başarısız',
-          message: `Hiçbir etiket yazdırılamadı. ${errors.length > 0 ? errors[0] : 'Bilinmeyen hata'}`,
-          color: 'red'
-        });
-      }
       
     } catch (error: any) {
       console.error(finalEditMode ? 'Form update failed:' : 'Form submission failed:', error);
@@ -451,7 +204,6 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
       
     } finally {
       setIsSubmitting(false);
-      notifications.hide('printing-progress');
     }
   };
 
@@ -466,7 +218,7 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
 
   const handleCompletionModalClose = () => {
     setCompletionModal({ opened: false, message: '' });
-    navigate('/qrcodes/list');
+    navigate('/qrcodes/?status=pending');
   };
 
   return (
@@ -546,27 +298,6 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
         </Button>
       </Group>
 
-      <Paper p="lg" withBorder mb="lg">
-        <ZebraPrinterSelector
-          ref={printerSelectorRef}
-          label="Printer Seçin"
-          placeholder="QR kod yazdırmak için bir printer seçin"
-          storeType="label"
-          showRefreshButton={true}
-          autoLoadOnMount={true}
-          disabled={false}
-          onChange={(device, deviceId) => {
-            setSelectedPrinter(device);
-          }}
-          onError={(error) => {
-            notifications.show({
-              title: 'Printer Hatası',
-              message: error,
-              color: 'red'
-            });
-          }}
-        />
-      </Paper>
       
       <LoadingOverlay visible={isLoading} />
       <form onSubmit={form.onSubmit(handleSubmit)} autoComplete='off'>
@@ -633,17 +364,6 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
         </Paper>
 
         <Group justify="flex-end" mt="lg">
-        <Button 
-            type="button"
-            variant="outline"
-            onClick={handlePrintTest}
-            size="xs"  
-            loading={isSubmitting}
-            disabled={isCompleted}
-            leftSection={<IconDeviceFloppy size={16} />}
-          >
-            Print Test
-          </Button>
           <Button 
             type="submit" 
             size="xs" 
@@ -651,7 +371,7 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
             disabled={isCompleted}
             leftSection={<IconDeviceFloppy size={16} />}
           >
-            Karekod Üret
+            İş Emri Oluştur
           </Button>
         </Group>
       </form>

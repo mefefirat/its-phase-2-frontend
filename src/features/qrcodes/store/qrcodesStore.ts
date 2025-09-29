@@ -71,7 +71,7 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             // Liste yüklenirken hata - kullanıcıya bildir ama throw etme
             notifications.show({
                 title: 'Hata!',
-                message: 'Qrcodes listesi yüklenirken bir hata oluştu.',
+                message: 'İş Emri listesi yüklenirken bir hata oluştu.',
                 color: 'red',
                 icon: React.createElement(IconX, { size: 16 }),
                 autoClose: 5000,
@@ -104,7 +104,7 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             
             notifications.show({
                 title: 'Hata!',
-                message: 'Qrcodes listesi yüklenirken bir hata oluştu.',
+                message: 'İş Emri listesi yüklenirken bir hata oluştu.',
                 color: 'red',
                 icon: React.createElement(IconX, { size: 16 }),
                 autoClose: 5000,
@@ -123,10 +123,10 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             const response = await fetchQrcodesItemsDropdown();
             set({ dropdownItems: response.data });
         } catch (error) {
-            console.error('Failed to fetch qrcodes items for dropdown', error);
+            console.error('Failed to fetch iş emri items for dropdown', error);
             notifications.show({
                 title: 'Hata!',
-                message: 'Dropdown için Qrcodes öğeleri yüklenirken bir hata oluştu.',
+                message: 'Dropdown için İş Emri yüklenirken bir hata oluştu.',
                 color: 'red',
                 icon: React.createElement(IconX, { size: 16 }),
                 autoClose: 5000,
@@ -191,13 +191,13 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             // Başarı notification'ı store seviyesinde göster
             notifications.show({
                 title: 'Başarılı',
-                message: 'Qrcodes öğesi başarıyla eklendi',
+                message: 'İş Emri başarıyla oluşturuldu',
                 color: 'green',
                 icon: React.createElement(IconCheck, { size: 16 }),
                 autoClose: 3000,
             });
         } catch (error) {
-            console.error('Failed to add qrcodes item', error);
+            console.error('Failed to add iş emri item', error);
             
             // Business logic errors handle et
             if (isBusinessError(error, 'duplicate')) {
@@ -238,7 +238,7 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             // Başarı notification'ı store seviyesinde göster
             notifications.show({
                 title: 'Başarılı',
-                message: 'Qrcodes öğesi başarıyla güncellendi',
+                message: 'İş Emri başarıyla güncellendi',
                 color: 'green',
                 icon: React.createElement(IconCheck, { size: 16 }),
                 autoClose: 3000,
@@ -269,7 +269,7 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             } else {
                 notifications.show({
                     title: 'Hata!',
-                    message: 'Qrcodes öğesi güncellenirken bir hata oluştu.',
+                    message: 'İş Emri güncellenirken bir hata oluştu.',
                     color: 'red',
                     icon: React.createElement(IconX, { size: 16 }),
                     autoClose: 5000,
@@ -288,7 +288,7 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             // Başarı notification'ı store seviyesinde göster
             notifications.show({
                 title: 'Başarılı',
-                message: 'Qrcodes öğesi başarıyla silindi',
+                message: 'İş Emri başarıyla silindi',
                 color: 'green',
                 icon: React.createElement(IconCheck, { size: 16 }),
                 autoClose: 3000,
@@ -303,7 +303,7 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
                 errorMessage.includes('reference')) {
                 notifications.show({
                     title: 'Hata',
-                    message: 'Bu Qrcodes öğesi başka kayıtlarda kullanıldığı için silinemez',
+                    message: 'Bu İş Emri başka kayıtlarda kullanıldığı için silinemez',
                     color: 'red',
                     icon: React.createElement(IconX, { size: 16 }),
                     autoClose: 5000,
@@ -311,7 +311,7 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             } else {
                 notifications.show({
                     title: 'Hata!',
-                    message: 'Qrcodes öğesi silinirken bir hata oluştu.',
+                    message: 'İş Emri silinirken bir hata oluştu.',
                     color: 'red',
                     icon: React.createElement(IconX, { size: 16 }),
                     autoClose: 5000,
@@ -330,7 +330,7 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             // Başarı notification'ı store seviyesinde göster
             notifications.show({
                 title: 'Başarılı',
-                message: 'Qrcodes öğesi başarıyla tamamlandı',
+                message: 'İş Emri başarıyla tamamlandı',
                 color: 'green',
                 icon: React.createElement(IconCheck, { size: 16 }),
                 autoClose: 3000,
@@ -352,7 +352,7 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             } else if (errorMessage.includes('not found')) {
                 notifications.show({
                     title: 'Hata',
-                    message: 'Qrcodes öğesi bulunamadı',
+                    message: 'İş Emri bulunamadı',
                     color: 'red',
                     icon: React.createElement(IconX, { size: 16 }),
                     autoClose: 5000,
@@ -360,7 +360,7 @@ export const useQrcodesStore = create<QrcodesState>((set, get) => ({
             } else {
                 notifications.show({
                     title: 'Hata!',
-                    message: 'Qrcodes öğesi tamamlanırken bir hata oluştu.',
+                    message: 'İş Emri tamamlanırken bir hata oluştu.',
                     color: 'red',
                     icon: React.createElement(IconX, { size: 16 }),
                     autoClose: 5000,
