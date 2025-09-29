@@ -178,7 +178,7 @@ export const login = (rememberMe = false) => {
   console.log('🔑 Redirecting to login...', rememberMe ? '(Remember Me enabled)' : '');
   
   const loginOptions: any = {
-    redirectUri: window.location.origin
+    redirectUri: `${window.location.origin}/its-phase`
   };
   
   // Remember Me için daha uzun süreli session isteme
@@ -194,7 +194,7 @@ export const logout = () => {
   // Logout öncesi token'ları temizle
   clearTokensFromStorage();
   return keycloak.logout({
-    redirectUri: window.location.origin
+    redirectUri: `${window.location.origin}/its-phase/login`
   });
 };
 

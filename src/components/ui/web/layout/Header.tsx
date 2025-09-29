@@ -32,7 +32,7 @@ export function Header() {
     const globalStore = useGlobalStore.getState();
     globalStore.reset();
     authStorage.clear();
-    window.location.href = '/login';
+    window.location.href = '/its-phase/login';
   };
 
   // User display name

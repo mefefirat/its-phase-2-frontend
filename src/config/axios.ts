@@ -56,7 +56,7 @@ axiosInstance.interceptors.response.use(
       authStorage.clear();
       notificationService.showSessionExpired();
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        window.location.href = '/its-phase/login';
       }
     } else if (!error.response) {
       // Network error - no response received - sistemsel hata

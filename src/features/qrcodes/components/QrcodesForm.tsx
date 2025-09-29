@@ -248,7 +248,7 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
   // UI LAYER - SADECE UI STATE VE LOADING HANDLE ET
   const handleSubmit = async (values: Partial<Qrcodes>) => {
     // Backend geliştirme için print kontrolü - true: print yapar, false: print yapmaz ama sanki yapmış gibi devam eder
-    const enablePrinting = false;
+    const enablePrinting = true;
     
     setIsSubmitting(true);
     
