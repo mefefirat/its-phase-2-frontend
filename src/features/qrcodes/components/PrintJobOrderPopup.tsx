@@ -1,6 +1,6 @@
 import { Modal, Stack, Text, Paper, Group, Button, ThemeIcon, Box } from '@mantine/core';
-import { IconPrinter, IconDeviceFloppy, IconReceipt2 } from '@tabler/icons-react';
-import { useState, useRef } from 'react';
+import { IconPrinter, IconDeviceFloppy, IconReceipt2, IconCheck } from '@tabler/icons-react';
+import { useState, useRef, useEffect } from 'react';
 import { notifications } from '@mantine/notifications';
 import ZebraPrinterSelector, { ZebraPrinterSelectorRef } from '@/shared/printer/ZebraPrinterSelector';
 import type { Qrcodes } from '../types/qrcodes';
@@ -16,11 +16,19 @@ export default function PrintJobOrderPopup({ opened, onClose, jobOrder }: PrintJ
   const [selectedPrinter, setSelectedPrinter] = useState<any>(null);
   const [isTestingPrinter, setIsTestingPrinter] = useState(false);
   const [isPrintingJobOrder, setIsPrintingJobOrder] = useState(false);
+  const [isJobCompleted, setIsJobCompleted] = useState(false);
   const printerSelectorRef = useRef<ZebraPrinterSelectorRef>(null);
   const { completeItem } = useQrcodesStore();
   
   // Test modu - burada değiştirerek normal/test mod arasında geçiş yapabilirsiniz
   const mode = 'normal' as 'normal' | 'test';
+
+  // Popup açıldığında isJobCompleted state'ini sıfırla
+  useEffect(() => {
+    if (opened) {
+      setIsJobCompleted(false);
+    }
+  }, [opened]);
 
   const handlePrinterTest = async () => {
     if (!selectedPrinter && mode !== 'test') {
@@ -36,14 +44,15 @@ export default function PrintJobOrderPopup({ opened, onClose, jobOrder }: PrintJ
     
     try {
       // Test ZPL content - aynı yapıda test label
+      const GS = "_1D";
       const testZPL = `^XA
                         ^FO15,30
                         ^BXN,4,200
-                        ^FD(01)12345678901234(21)TEST123456(10)LOT001(17)250101^FS
-                        ^FO120,30^A0N,18,18^FD(01) 12345678901234^FS
-                        ^FO120,55^A0N,18,18^FD(21) TEST123456^FS
-                        ^FO120,80^A0N,18,18^FD(10) LOT001^FS
-                        ^FO120,105^A0N,18,18^FD(17) 250101^FS
+                        ^FD01 08699591090129 21 1234567890123456 ${GS} 17 290930 10 LT00121^FS
+                        ^FO130,30^A0N,18,18^FD(01) 08699591090129^FS
+                        ^FO130,55^A0N,18,18^FD(21) 1234567890123456^FS
+                        ^FO130,80^A0N,18,18^FD(17) 290930^FS
+                        ^FO130,105^A0N,18,18^FD(10) LT00121^FS
                         ^XZ`;
 
       notifications.show({
@@ -143,18 +152,18 @@ export default function PrintJobOrderPopup({ opened, onClose, jobOrder }: PrintJ
       
       for (let i = 0; i < quantity; i++) {
         const currentSerialNumber = (startSerialNumber + i).toString().padStart(16, '0');
-        
+        const GS = "\\1D"; // Yöntem A: backslash kaçış
+
         const jobOrderZPL = `^XA
-                ^FO15,30
-                ^BXN,4,200
-                ^FD(01)${jobOrder.gtin || 'N/A'}(21)${currentSerialNumber}(10)${jobOrder.lot || 'N/A'}(17)${formattedExpiry}^FS
-
-                ^FO120,30^A0N,18,18^FD(01) ${jobOrder.gtin || 'N/A'}^FS
-                ^FO120,55^A0N,18,18^FD(21) ${currentSerialNumber}^FS
-                ^FO120,80^A0N,18,18^FD(10) ${jobOrder.lot || 'N/A'}^FS
-                ^FO120,105^A0N,18,18^FD(17) ${formattedExpiry}^FS
-
-                ^XZ`;
+        ^CI28
+        ^FO15,30
+        ^BXN,4,200
+        ^FH\\^FD01${jobOrder.gtin}21${currentSerialNumber}${GS}17${formattedExpiry}10${jobOrder.lot}^FS
+        ^FO130,30^A0N,18,18^FD(01) ${jobOrder.gtin || 'N/A'}^FS
+        ^FO130,55^A0N,18,18^FD(21) ${currentSerialNumber}^FS
+        ^FO130,80^A0N,18,18^FD(17) ${formattedExpiry}^FS
+        ^FO130,105^A0N,18,18^FD(10) ${jobOrder.lot || 'N/A'}^FS
+        ^XZ`;
         
         zplContents.push(jobOrderZPL);
       }
@@ -258,6 +267,11 @@ export default function PrintJobOrderPopup({ opened, onClose, jobOrder }: PrintJ
           // completeItem kendi notification'ını göstereceği için burada ek notification göstermiyoruz
         }
       }
+
+      // Yazdırma başarılı olduysa job completed state'ini güncelle
+      if (failCount === 0) {
+        setIsJobCompleted(true);
+      }
       
     } catch (error: any) {
       console.error('Job order print failed:', error);
@@ -347,24 +361,36 @@ export default function PrintJobOrderPopup({ opened, onClose, jobOrder }: PrintJ
 
         {/* Action Buttons */}
         <Group justify="flex-end" gap="sm">
-          <Button
-            variant="outline"
-            leftSection={<IconDeviceFloppy size={16} />}
-            onClick={handlePrinterTest}
-            loading={isTestingPrinter}
-            disabled={(mode !== 'test' && !selectedPrinter) || isPrintingJobOrder}
-          >
-            {mode === 'test' ? 'Test Et (HTTP)' : 'Yazıcıyı Test Et'}
-          </Button>
-          
-          <Button
-            leftSection={<IconPrinter size={16} />}
-            onClick={handlePrintJobOrder}
-            loading={isPrintingJobOrder}
-            disabled={(mode !== 'test' && !selectedPrinter) || isTestingPrinter}
-          >
-            {mode === 'test' ? 'Test Et (HTTP)' : 'İş Emrini Yazdır'}
-          </Button>
+          {isJobCompleted ? (
+            <Button
+              leftSection={<IconCheck size={16} />}
+              onClick={onClose}
+              color="green"
+            >
+              Kapat
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                leftSection={<IconDeviceFloppy size={16} />}
+                onClick={handlePrinterTest}
+                loading={isTestingPrinter}
+                disabled={(mode !== 'test' && !selectedPrinter) || isPrintingJobOrder}
+              >
+                {mode === 'test' ? 'Test Et (HTTP)' : 'Yazıcıyı Test Et'}
+              </Button>
+              
+              <Button
+                leftSection={<IconPrinter size={16} />}
+                onClick={handlePrintJobOrder}
+                loading={isPrintingJobOrder}
+                disabled={(mode !== 'test' && !selectedPrinter) || isTestingPrinter}
+              >
+                {mode === 'test' ? 'Test Et (HTTP)' : 'İş Emrini Yazdır'}
+              </Button>
+            </>
+          )}
         </Group>
       </Stack>
     </Modal>

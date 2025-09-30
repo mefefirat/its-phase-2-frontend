@@ -38,6 +38,20 @@ export default function MaterialForm({ initialData, editMode = false, materialId
     },
     validate: {
       material_name: (value) => (!value || value.trim().length < 2 ? 'Lütfen Ürün Adı giriniz' : null),
+      sku: (value) => (!value || value.toString().trim().length === 0 ? 'SKU zorunludur' : null),
+      gtin: (value) => {
+        if (!value || value.toString().trim().length === 0) {
+          return 'GTIN zorunludur';
+        }
+        const gtinStr = value.toString().trim();
+        if (gtinStr.length !== 14) {
+          return 'GTIN 14 hane olmalıdır';
+        }
+        if (!/^\d{14}$/.test(gtinStr)) {
+          return 'GTIN sadece sayılardan oluşmalıdır';
+        }
+        return null;
+      },
     },
   });
 
@@ -229,13 +243,18 @@ export default function MaterialForm({ initialData, editMode = false, materialId
                 label="SKU"
                 placeholder="Ör: SKU-001234"
                 {...form.getInputProps('sku')}
+                withAsterisk
+                required
               />
             </Grid.Col>
             <Grid.Col span={6}>
               <TextInput
                 label="GTIN"
-                placeholder="Ör: 08600001234567"
+                placeholder="Ör: 12345678901234"
                 {...form.getInputProps('gtin')}
+                withAsterisk
+                required
+                maxLength={14}
               />
             </Grid.Col>
           </Grid>

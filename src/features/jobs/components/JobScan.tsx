@@ -327,8 +327,9 @@ export default function JobScan() {
       
       // Karekod validasyonu yap
       const validationResult = pharmaValidator(values.barcode);
-      console.log(validationResult);
+    
       
+
       if (!validationResult.status) {
         setErrorMessage(validationResult.message || 'Karekod validasyon hatası');
         // Hata durumunda input'u temizle
@@ -345,9 +346,8 @@ export default function JobScan() {
       const gtinFromBarcode = validationResult.gtin;
       const lotFromBarcode = validationResult.lot;
       const expiryFromBarcode = validationResult.exp;
-      
-      console.log('Validasyon başarılı - Serial:', serialNumber);
-      console.log('Karekod Bilgileri:', { gtinFromBarcode, lotFromBarcode, expiryFromBarcode });
+
+     
       
       if (!serialNumber) {
         setErrorMessage('Serial numarası bulunamadı');
@@ -364,27 +364,29 @@ export default function JobScan() {
       const jobGtin = job?.gtin;
       const jobLot = job?.lot;
       const jobExpiry = job?.expiry_date;
+
       
       const mismatches: string[] = [];
       
       // GTIN karşılaştırması
       if (jobGtin && gtinFromBarcode !== jobGtin) {
-        mismatches.push(`GTIN: Karekod (${gtinFromBarcode}) ≠ Job (${jobGtin})`);
+        mismatches.push(`GTIN: Karekod (${gtinFromBarcode}) ≠ İş Emri (${jobGtin})`);
+        console.log('GTIN karşılaştırması', gtinFromBarcode, jobGtin);
       }
       
       // Lot karşılaştırması
       if (jobLot && lotFromBarcode !== jobLot) {
-        mismatches.push(`Lot: Karekod (${lotFromBarcode}) ≠ Job (${jobLot})`);
+        mismatches.push(`Lot: Karekod (${lotFromBarcode}) ≠ İş Emri (${jobLot})`);
       }
       
       // Son kullanma tarihi karşılaştırması (YYYYMMDD formatında)
-      if (jobExpiry && expiryFromBarcode !== jobExpiry.replace(/-/g, '')) {
-        mismatches.push(`Son Kullanma: Karekod (${expiryFromBarcode}) ≠ Job (${jobExpiry})`);
+      if (jobExpiry !== expiryFromBarcode) {
+        mismatches.push(`Son Kullanma: Karekod (${expiryFromBarcode}) ≠ İş Emri (${jobExpiry})`);
       }
       
       // Eşleşmeyen bilgiler varsa hata göster
       if (mismatches.length > 0) {
-        setErrorMessage(`Karekod bilgileri job bilgileriyle eşleşmiyor:\n${mismatches.join('\n')}`);
+        setErrorMessage(`Karekod bilgileri İş bilgileriyle eşleşmiyor:\n${mismatches.join('\n')}`);
         // Hata durumunda input'u temizle
         form.setFieldValue('barcode', '');
         setTimeout(() => {
@@ -946,6 +948,7 @@ export default function JobScan() {
                   loading={isSubmitting}
                   leftSection={<IconDeviceFloppy size={16} />}
                   disabled={!canPrint}
+                 
                 >
                   Kaydet
                 </Button>

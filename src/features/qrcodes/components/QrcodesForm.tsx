@@ -6,6 +6,7 @@ import { notifications } from '@mantine/notifications';
 import { IconPill, IconArrowLeft, IconX, IconDeviceFloppy, IconAlertTriangle, IconCheck } from '@tabler/icons-react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import type { Qrcodes } from '../types/qrcodes';
+import { validateGTIN14 } from '../../../utils/pharmaValidator';
 
 interface QrcodesFormProps {
   initialData?: Partial<Qrcodes>;
@@ -41,7 +42,22 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
       order_number: 0,
     },
     validate: {
-      gtin: (value) => (!value || value.trim().length < 1 ? 'Lütfen GTIN giriniz' : null),
+      gtin: (value) => {
+        if (!value || value.trim().length === 0) {
+          return 'Lütfen GTIN giriniz';
+        }
+        const gtinValue = value.trim();
+        if (gtinValue.length !== 14) {
+          return 'GTIN tam olarak 14 hane olmalıdır';
+        }
+        if (!/^\d{14}$/.test(gtinValue)) {
+          return 'GTIN sadece rakamlardan oluşmalıdır';
+        }
+        if (!validateGTIN14(gtinValue)) {
+          return 'GTIN hatalı. Lütfen doğru GTIN giriniz';
+        }
+        return null;
+      },
       lot: (value) => (!value || value.trim().length < 1 ? 'Lütfen LOT giriniz' : null),
       expiry_date: (value) => (!value || value.trim().length < 1 ? 'Lütfen Son Kullanma Tarihi giriniz' : null),
       order_number: (value) => {
@@ -330,11 +346,11 @@ export default function QrcodesForm({ initialData, editMode = false, itemId }: Q
             <Grid.Col span={4}>
               <TextInput
                 label="GTIN"
-                placeholder="Ör: 1234567890123"
+                placeholder="Ör: 01234567890123"
                 {...form.getInputProps('gtin')}
                 withAsterisk
                 required
-                description="Ürün için benzersiz tanımlayıcı"
+                description="Ürün için benzersiz tanımlayıcı, 14 haneli"
               />
             </Grid.Col>
             <Grid.Col span={4}>
