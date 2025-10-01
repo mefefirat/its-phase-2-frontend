@@ -14,16 +14,18 @@ export type PharmaGs1 = {
 };
 
 // Hata metinleri (UI'da i18n için uygun)
-export enum PharmaError {
-  MissingGTIN      = "GTIN (01) eksik",
-  InvalidGTIN      = "GTIN (01) hatalı (Mod10 kontrolü)",
-  MissingExpiry    = "Son kullanma tarihi (17) eksik",
-  InvalidExpiry    = "Son kullanma tarihi (17) hatalı (YYMMDD olmalı ve gerçek bir tarih olmalı)",
-  MissingLot       = "Lot (10) eksik",
-  InvalidLotLen    = "Lot (10) uzunluğu 1–20 olmalı",
-  MissingSerial    = "Seri (21) eksik",
-  InvalidSerialLen = "Seri (21) uzunluğu 1–20 olmalı",
-}
+export const PharmaError = {
+  MissingGTIN: "GTIN (01) eksik",
+  InvalidGTIN: "GTIN (01) hatalı (Mod10 kontrolü)",
+  MissingExpiry: "Son kullanma tarihi (17) eksik",
+  InvalidExpiry: "Son kullanma tarihi (17) hatalı (YYMMDD olmalı ve gerçek bir tarih olmalı)",
+  MissingLot: "Lot (10) eksik",
+  InvalidLotLen: "Lot (10) uzunluğu 1–20 olmalı",
+  MissingSerial: "Seri (21) eksik",
+  InvalidSerialLen: "Seri (21) uzunluğu 1–20 olmalı",
+} as const;
+
+export type PharmaError = typeof PharmaError[keyof typeof PharmaError];
 
 export type PharmaValidationOk = {
   status: true;
